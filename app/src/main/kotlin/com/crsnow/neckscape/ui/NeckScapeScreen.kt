@@ -146,27 +146,31 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     val player = LocalNotePlayer.current
     fun Voicing.positions() = frets.withIndex().mapNotNull { (s, f) -> f?.let { Position(s, it) } }
     fun Voicing.midi() = positions().map { state.tuning.midi[it.string] + it.fret }
-    fun strum(shape: Voicing) {
+    fun strum(shape: Voicing, fromPlay: Boolean = false) {
         player?.play(PluckSynth.strum(shape.midi()), ring = 2.5) ?: return
-        vm.follow(listOf(shape.positions().toSet()), step = 1.5)
+        vm.follow(listOf(shape.positions().toSet()), step = 1.5, playing = fromPlay)
     }
+    /** ▶ plays what's showing; pressed again while it plays, it stops. */
     fun playAll() {
         player ?: return
+        if (playback.playing) {
+            vm.stopPlayback()
+            return
+        }
         when (state.viewMode) {
             ViewMode.Song -> {
-                if (playback.playing) vm.stopPlayback()
-                else runCatching { vm.playSong(loop = false, section = null, tempoPct = 100.0) }.onFailure { message = it.message }
+                runCatching { vm.playSong(loop = false, section = null, tempoPct = 100.0) }.onFailure { message = it.message }
             }
             // Up the numbered order and back down.
             ViewMode.Scale, ViewMode.Arpeggio -> {
                 val step = 60.0 / state.tempo
                 player.play(PluckSynth.upAndDown(sequence.map { state.tuning.midi[it.string] + it.fret }, step))
-                vm.follow(sequence.thereAndBack().map { setOf(it) }, step)
+                vm.follow(sequence.thereAndBack().map { setOf(it) }, step, playing = true)
             }
             // Strum the selected shape, else the first one, else the bare chord tones.
             ViewMode.Chord -> {
                 val shape = voicing ?: voicings.firstOrNull()
-                if (shape != null) strum(shape)
+                if (shape != null) strum(shape, fromPlay = true)
                 else player.play(PluckSynth.strum(state.chord.intervals.map { 48 + state.root.pitchClass + it.semitones }), ring = 2.5)
             }
         }

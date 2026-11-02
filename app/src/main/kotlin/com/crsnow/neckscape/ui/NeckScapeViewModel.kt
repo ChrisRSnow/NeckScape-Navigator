@@ -192,8 +192,10 @@ class NeckScapeViewModel : ViewModel() {
     private var followJob: Job? = null
 
     /** Rings each group in turn, [step] seconds apart, then clears after [hold] — in time with the audio. */
-    fun follow(groups: List<Set<Position>>, step: Double, hold: Double = 0.5) {
+    fun follow(groups: List<Set<Position>>, step: Double, hold: Double = 0.5, playing: Boolean = false) {
         followJob?.cancel()
+        // Play-button playback shows as playing (so the button can stop it); a tapped note doesn't.
+        if (playing) _playback.value = Playback(playing = true)
         followJob = viewModelScope.launch {
             for (group in groups) {
                 _sounding.value = group
@@ -201,6 +203,7 @@ class NeckScapeViewModel : ViewModel() {
             }
             delay((hold * 1000).toLong())
             _sounding.value = emptySet()
+            if (playing) _playback.value = Playback()
         }
     }
 
@@ -471,9 +474,12 @@ class NeckScapeViewModel : ViewModel() {
         return plan.summary + if (loop) ", looping" else ""
     }
 
+    /** Stops whatever is playing — a song, a scale run or a strum — sound and ringing together. */
     fun stopPlayback() {
         playJob?.cancel()
         playJob = null
+        followJob?.cancel()
+        followJob = null
         player?.stop()
         _sounding.value = emptySet()
         _playback.value = Playback()

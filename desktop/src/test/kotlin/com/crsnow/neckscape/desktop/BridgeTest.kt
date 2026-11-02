@@ -134,4 +134,16 @@ class BridgeTest {
         val bad = tool("show_chord", mapOf("chord" to "Hm7"))
         assertEquals("INVALID_SCHEMA", (bad["error"] as Map<*, *>)["code"])
     }
+
+    @Test fun `play shows as playing until stopped`() {
+        val p = com.crsnow.neckscape.theory.Position(0, 3)
+        vm.follow(listOf(setOf(p), setOf(p)), step = 5.0, playing = true)
+        assertEquals(true, vm.playback.value.playing)
+        vm.stopPlayback()
+        assertEquals(false, vm.playback.value.playing)
+        assertTrue(vm.sounding.value.isEmpty())
+        // A tapped note isn't "playing": the button stays ▶.
+        vm.follow(listOf(setOf(p)), step = 5.0)
+        assertEquals(false, vm.playback.value.playing)
+    }
 }
