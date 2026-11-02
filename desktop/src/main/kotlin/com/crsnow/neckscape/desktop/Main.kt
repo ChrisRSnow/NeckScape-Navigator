@@ -23,6 +23,7 @@ import com.crsnow.neckscape.ui.AiTools
 import com.crsnow.neckscape.ui.FileOpener
 import com.crsnow.neckscape.ui.LocalBridge
 import com.crsnow.neckscape.ui.LocalFileOpener
+import com.crsnow.neckscape.ui.LocalScrollbars
 import com.crsnow.neckscape.ui.NeckScapeScreen
 import com.crsnow.neckscape.ui.FileSaver
 import com.crsnow.neckscape.ui.NeckScapeViewModel
@@ -58,6 +59,7 @@ fun main() = application {
                 LocalFileSaver provides saver,
                 LocalFileOpener provides opener,
                 LocalBridge provides bridge,
+                LocalScrollbars provides DesktopScrollbars,
             ) {
                 NeckScapeScreen(vm = viewModel)
             }

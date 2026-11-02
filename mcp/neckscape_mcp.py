@@ -439,9 +439,10 @@ def build_server():
         return send_file(p, format, part, track, target, _metadata(p) if p.is_file() else None)
 
     @mcp.tool()
-    def playback(action: str = "play", section: str | None = None, tempo_pct: float | None = None, target: str | None = None) -> dict:
-        """Plays, loops or stops the loaded progression/tab; optionally one section, at tempo_pct of its tempo."""
-        return call("playback", {"action": action, "section": section, "tempo_pct": tempo_pct}, target)
+    def playback(action: str = "play", section: str | None = None, tempo_pct: float | None = None, sound: str | None = None, target: str | None = None) -> dict:
+        """Plays, loops or stops the loaded progression/tab; optionally one section, at tempo_pct of its tempo,
+        with a sound: acoustic, classical, electric, piano or synth."""
+        return call("playback", {"action": action, "section": section, "tempo_pct": tempo_pct, "sound": sound}, target)
 
     @mcp.tool()
     def clear(target: str | None = None) -> dict:

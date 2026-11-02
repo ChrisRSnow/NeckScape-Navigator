@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
@@ -144,7 +146,9 @@ fun Fretboard(
     val top = EDGE + if (regions.isNotEmpty()) REGION_STRIP else 0.dp
     val height = top + EDGE + STRING_GAP * (tuning.strings - 1) + NUMBER_ROW
 
-    Box(modifier.horizontalScroll(rememberScrollState(), reverseScrolling = leftHanded)) {
+    val scroll = rememberScrollState()
+    Column(modifier) {
+    Box(Modifier.horizontalScroll(scroll, reverseScrolling = leftHanded)) {
         Canvas(
             Modifier
                 .size(width, height)
@@ -262,6 +266,8 @@ fun Fretboard(
                 drawCircle(HighlightPink, radius + 5.dp.toPx(), center, style = Stroke(3.dp.toPx()))
             }
         }
+    }
+    LocalScrollbars.current?.Horizontal(scroll, Modifier.fillMaxWidth(), reverse = leftHanded)
     }
 }
 

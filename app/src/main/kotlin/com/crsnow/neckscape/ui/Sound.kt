@@ -1,6 +1,7 @@
 package com.crsnow.neckscape.ui
 
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.crsnow.neckscape.theory.Instrument
 import com.crsnow.neckscape.theory.NoteEvent
 import com.crsnow.neckscape.theory.PluckSynth
 import kotlinx.coroutines.CoroutineScope
@@ -18,13 +19,15 @@ interface AudioOutput {
 
 /** Renders notes off the main thread and hands them to the platform output. */
 class NotePlayer(private val output: AudioOutput) {
+    /** The sound everything plays with. */
+    @Volatile var instrument: Instrument = Instrument.Acoustic
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
 
     fun play(events: List<NoteEvent>, ring: Double = 1.6) {
         job?.cancel()
         job = scope.launch {
-            val pcm = PluckSynth.render(events, ring)
+            val pcm = PluckSynth.render(events, ring, instrument)
             output.play(pcm, PluckSynth.SAMPLE_RATE)
         }
     }

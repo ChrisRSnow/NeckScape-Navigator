@@ -15,6 +15,7 @@ import com.crsnow.neckscape.song.TabNote
 import com.crsnow.neckscape.song.Technique
 import com.crsnow.neckscape.song.Warning
 import com.crsnow.neckscape.song.position
+import com.crsnow.neckscape.theory.Instrument
 import com.crsnow.neckscape.theory.Note
 import com.crsnow.neckscape.theory.Position
 import com.crsnow.neckscape.theory.Tuning
@@ -79,6 +80,7 @@ class AiTools(private val vm: NeckScapeViewModel, private val platform: String) 
         "voicing_styles" to listOf("open", "barre", "drop2", "position_N"),
         "import_formats" to Importers.FORMATS,
         "techniques" to Technique.TYPES.toList(),
+        "sounds" to Instrument.entries.map { it.name.lowercase() },
         "tunings" to Tunings.all.map { mapOf("name" to it.name, "strings" to it.midi.map { m -> Tuning.midiName(m) }) },
         "max_frets" to vm.state.value.fretCount,
         "string_numbering" to "1 = first (highest) string, as in tab",
@@ -269,6 +271,12 @@ class AiTools(private val vm: NeckScapeViewModel, private val platform: String) 
         return when (action) {
             "stop" -> { vm.stopPlayback(); ok(summary = "Stopped") }
             "play", "loop" -> {
+                root.opt("sound")?.let { n ->
+                    val want = n.str().lowercase()
+                    val pick = Instrument.entries.firstOrNull { it.name.lowercase() == want || it.label.lowercase().startsWith(want) }
+                        ?: throw n.bad("Unknown sound '${n.str()}'; sounds: ${Instrument.entries.joinToString { it.name.lowercase() }}")
+                    vm.setInstrument(pick)
+                }
                 val pct = root.opt("tempo_pct")?.num() ?: 100.0
                 if (pct < 10 || pct > 300) throw root.req("tempo_pct").bad("tempo_pct must be 10 to 300")
                 val summary = vm.playSong(loop = action == "loop", section = root.opt("section")?.str(), tempoPct = pct)

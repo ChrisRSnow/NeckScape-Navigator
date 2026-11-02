@@ -787,7 +787,7 @@ private fun readWav(file: File): ShortArray {
     error("no data chunk in $file")
 }
 
-private fun writeWav(file: File, pcm: ShortArray, sampleRate: Int) {
+internal fun writeWav(file: File, pcm: ShortArray, sampleRate: Int) {
     val data = pcm.size * 2
     val buf = ByteBuffer.allocate(44 + data).order(ByteOrder.LITTLE_ENDIAN)
     buf.put("RIFF".toByteArray()).putInt(36 + data).put("WAVE".toByteArray())

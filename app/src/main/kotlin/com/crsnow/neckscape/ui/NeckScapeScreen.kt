@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -65,6 +67,7 @@ import com.crsnow.neckscape.notation.stack
 import com.crsnow.neckscape.song.Progression
 import com.crsnow.neckscape.song.voicingFor
 import com.crsnow.neckscape.theory.Chords
+import com.crsnow.neckscape.theory.Instrument
 import com.crsnow.neckscape.theory.Level
 import com.crsnow.neckscape.theory.allows
 import com.crsnow.neckscape.theory.chordIndices
@@ -172,8 +175,9 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     LaunchedEffect(voicing) {
         voicing?.let(::strum)
     }
-    // Pushed content (the AI bridge) plays through the same speaker.
+    // Pushed content (the AI bridge) plays through the same speaker, with the chosen sound.
     LaunchedEffect(player) { vm.player = player }
+    LaunchedEffect(player, state.instrument) { player?.instrument = state.instrument }
 
     Scaffold(
         topBar = {
@@ -193,12 +197,14 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
             )
         },
     ) { padding ->
+        val page = rememberScrollState()
+        val scrollbars = LocalScrollbars.current
+        Box(Modifier.fillMaxSize().padding(padding)) {
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(vertical = 8.dp),
+                .verticalScroll(page)
+                .padding(top = 8.dp, bottom = 8.dp, end = if (scrollbars != null) 12.dp else 0.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -233,17 +239,22 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                 }
             }
 
-            if (!isSong) LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                itemsIndexed(ROOT_LABELS) { pc, label ->
-                    FilterChip(
-                        selected = state.root.pitchClass == pc,
-                        onClick = { vm.selectRoot(pc) },
-                        label = { Text(label) },
-                    )
+            if (!isSong) Column {
+                val roots = rememberLazyListState()
+                LazyRow(
+                    state = roots,
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    itemsIndexed(ROOT_LABELS) { pc, label ->
+                        FilterChip(
+                            selected = state.root.pitchClass == pc,
+                            onClick = { vm.selectRoot(pc) },
+                            label = { Text(label) },
+                        )
+                    }
                 }
+                scrollbars?.HorizontalLazy(roots, Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             }
 
             Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -320,9 +331,10 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                 }
             }
 
+            val strip = rememberScrollState()
             Row(
                 Modifier
-                    .horizontalScroll(rememberScrollState())
+                    .horizontalScroll(strip)
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -340,6 +352,7 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                     }
                 }
             }
+            scrollbars?.Horizontal(strip, Modifier.fillMaxWidth().padding(horizontal = 16.dp))
 
             Row(
                 Modifier.padding(horizontal = 16.dp),
@@ -418,6 +431,8 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                 }
             }
         }
+        scrollbars?.Vertical(page, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+        }
     }
 
     message?.let { text ->
@@ -473,19 +488,43 @@ private fun RangeControls(state: UiState, vm: NeckScapeViewModel) {
                 modifier = modifier,
             )
         }
-        // One row when there's room (tablet, desktop), two on a phone.
+        val sound = @Composable { SoundPicker(state.instrument, vm::setInstrument) }
+        // One row when there's room (tablet, desktop), more on a phone.
         BoxWithConstraints {
-            if (maxWidth >= 600.dp) {
+            if (maxWidth >= 760.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     numbering()
                     Spacer(Modifier.width(24.dp))
                     tempo(Modifier.weight(1f))
+                    Spacer(Modifier.width(16.dp))
+                    sound()
                 }
             } else {
                 Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) { numbering() }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        numbering()
+                        Spacer(Modifier.weight(1f))
+                        sound()
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) { tempo(Modifier.weight(1f)) }
                 }
+            }
+        }
+    }
+}
+
+/** The playback sound: acoustic, classical, electric, piano or synth. */
+@Composable
+private fun SoundPicker(current: Instrument, onPick: (Instrument) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { open = true }) { Text("Sound: ${current.label}", maxLines = 1) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            Instrument.entries.forEach { i ->
+                DropdownMenuItem(
+                    text = { Text(i.label, fontWeight = if (i == current) FontWeight.Bold else null) },
+                    onClick = { open = false; onPick(i) },
+                )
             }
         }
     }
@@ -555,7 +594,9 @@ private fun DiatonicChords(state: UiState, vm: NeckScapeViewModel) {
                 Switch(checked = state.diatonicSevenths, onCheckedChange = vm::setDiatonicSevenths)
             }
         }
+        val row = rememberLazyListState()
         LazyRow(
+            state = row,
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -567,6 +608,7 @@ private fun DiatonicChords(state: UiState, vm: NeckScapeViewModel) {
                 )
             }
         }
+        LocalScrollbars.current?.HorizontalLazy(row, Modifier.fillMaxWidth().padding(horizontal = 16.dp))
     }
 }
 
@@ -634,7 +676,9 @@ private fun SettingsDialog(state: UiState, vm: NeckScapeViewModel, onDismiss: ()
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
         title = { Text("Settings") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            val scroll = rememberScrollState()
+            Box {
+            Column(Modifier.verticalScroll(scroll).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column {
                     Text("Frets: ${state.fretCount}")
                     Slider(
@@ -649,6 +693,8 @@ private fun SettingsDialog(state: UiState, vm: NeckScapeViewModel, onDismiss: ()
                     Switch(checked = state.leftHanded, onCheckedChange = vm::setLeftHanded)
                 }
                 LocalBridge.current?.let { BridgeSettings(it) }
+            }
+            LocalScrollbars.current?.Vertical(scroll, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
             }
         },
     )

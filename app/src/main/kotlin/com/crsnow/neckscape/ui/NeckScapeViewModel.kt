@@ -14,6 +14,7 @@ import com.crsnow.neckscape.song.barsOf
 import com.crsnow.neckscape.song.schedule
 import com.crsnow.neckscape.theory.ChordSymbol
 import com.crsnow.neckscape.theory.CagedPosition
+import com.crsnow.neckscape.theory.Instrument
 import com.crsnow.neckscape.theory.Interval
 import com.crsnow.neckscape.theory.cagedPositions
 import com.crsnow.neckscape.theory.isMinorQuality
@@ -71,8 +72,8 @@ private const val TO_END = Int.MAX_VALUE
 data class UiState(
     val viewMode: ViewMode = ViewMode.Scale,
     val display: Display = Display.Fretboard,
-    /** Which chords and scales are offered. */
-    val level: Level = Level.Advanced,
+    /** Which chords and scales are offered; every launch starts at Beginner. */
+    val level: Level = Level.Beginner,
     val root: Note = Note(0),
     val familyIndex: Int = 0,
     val scaleIndex: Int = 0,
@@ -89,6 +90,8 @@ data class UiState(
     val showOrder: Boolean = true,
     /** Scale playback speed, one note per beat. */
     val tempo: Int = 180,
+    /** The playback sound. */
+    val instrument: Instrument = Instrument.Acoustic,
     val leftHanded: Boolean = false,
     val diatonicSevenths: Boolean = false,
     /** Index into the voicing list, or -1 to show every chord tone. */
@@ -316,6 +319,11 @@ class NeckScapeViewModel : ViewModel() {
     fun setShowOrder(show: Boolean) = edit { copy(showOrder = show) }
 
     fun setTempo(bpm: Int) = edit { copy(tempo = bpm.coerceIn(MIN_TEMPO, MAX_TEMPO)) }
+
+    fun setInstrument(instrument: Instrument) {
+        player?.instrument = instrument
+        edit { copy(instrument = instrument) }
+    }
 
     fun setLeftHanded(left: Boolean) = edit { copy(leftHanded = left) }
 

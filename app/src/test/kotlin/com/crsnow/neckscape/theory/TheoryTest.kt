@@ -225,4 +225,20 @@ class TheoryTest {
         assertTrue(Tunings.all.first().isStandardShape())
         assertTrue(!Tunings.all.first { it.name == "DADGAD" }.isStandardShape())
     }
+
+    @Test fun `every sound renders a clean, audible clip at the right pitch`() {
+        val a = listOf(NoteEvent(57, 0.0)) // A3, 220 Hz
+        for (instrument in Instrument.entries) {
+            val pcm = PluckSynth.render(a, ring = 1.0, instrument = instrument)
+            assertTrue(instrument.name, pcm.size >= PluckSynth.SAMPLE_RATE)
+            val rms = kotlin.math.sqrt(pcm.take(PluckSynth.SAMPLE_RATE / 2).sumOf { it.toDouble() * it } / (PluckSynth.SAMPLE_RATE / 2))
+            assertTrue("${instrument.name} is too quiet: $rms", rms > 1_000)
+            // Pitch from autocorrelation over 0.1–0.3 s: the best lag should be one period of 220 Hz.
+            val x = pcm.copyOfRange(4_410, 13_230).map { it.toDouble() }
+            val best = (120..260).maxBy { lag -> (0 until x.size - lag).sumOf { x[it] * x[it + lag] } }
+            assertEquals("${instrument.name} pitch", 44_100.0 / 220, best.toDouble(), 2.5)
+        }
+        // Acoustic is unchanged from 1.0: the same pluck as before.
+        assertEquals(PluckSynth.render(a, 1.0).toList(), PluckSynth.render(a, 1.0, Instrument.Acoustic).toList())
+    }
 }

@@ -13,12 +13,14 @@ import com.crsnow.neckscape.ui.NeckScapeScreen
 import com.crsnow.neckscape.ui.NeckScapeViewModel
 import com.crsnow.neckscape.theory.Level
 import com.crsnow.neckscape.theory.Chords
+import com.crsnow.neckscape.theory.PluckSynth
 import com.crsnow.neckscape.theory.Note
 import com.crsnow.neckscape.theory.Tunings
 import com.crsnow.neckscape.theory.VoicingFinder
 import com.crsnow.neckscape.theory.playingOrder
 import com.crsnow.neckscape.ui.Display
 import com.crsnow.neckscape.ui.LabelMode
+import com.crsnow.neckscape.ui.LocalScrollbars
 import com.crsnow.neckscape.ui.NoteMark
 import com.crsnow.neckscape.ui.UiState
 import com.crsnow.neckscape.ui.ViewMode
@@ -40,7 +42,7 @@ class SnapshotTest {
     private fun snapshot(name: String, width: Int, height: Int, density: Float, setup: (NeckScapeViewModel) -> Unit = {}) {
         val vm = NeckScapeViewModel()
         val scene = ImageComposeScene(width, height, Density(density)) {
-            CompositionLocalProvider(LocalLifecycleOwner provides owner) {
+            CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalScrollbars provides DesktopScrollbars) {
                 MaterialTheme(lightColorScheme()) { NeckScapeScreen(vm) }
             }
         }
@@ -120,5 +122,19 @@ class SnapshotTest {
         it.setViewMode(ViewMode.Chord)
         it.selectRoot(7)
         it.setCaged(3)
+    }
+
+    /** A small window: the fretboard and the page both need scroll bars. */
+    @Test fun desktopNarrow() = snapshot("desktop-narrow", 820, 1000, 1f)
+
+    /** A short phrase in every sound, as WAVs in build/sounds, for listening (the video helpers write the WAV). */
+    @Test fun soundSamples() {
+        val dir = File("build/sounds").apply { mkdirs() }
+        val scale = listOf(45, 47, 48, 50, 52, 53, 55, 57).mapIndexed { i, m -> com.crsnow.neckscape.theory.NoteEvent(m, i * 0.28) }
+        val chord = PluckSynth.strum(listOf(45, 52, 57, 60, 64)).map { it.copy(at = it.at + 2.6) }
+        for (instrument in com.crsnow.neckscape.theory.Instrument.entries) {
+            val pcm = PluckSynth.render(scale + chord, ring = 1.8, instrument = instrument)
+            writeWav(File(dir, "sound-${instrument.name.lowercase()}.wav"), pcm, PluckSynth.SAMPLE_RATE)
+        }
     }
 }
