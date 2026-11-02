@@ -33,11 +33,12 @@ INK = "#05262d"
 LIME = "#c6dd3e"
 
 # Wheel geometry, in a 1024 box centred on (0, 0); everything fits inside r = 490.
-RIM = 300          # rim centre line
-RIM_W = 46
-HUB = 98
-NUT = 392          # where neck meets headstock
-HEAD = 104         # headstock length
+RIM = 268          # rim centre line
+RIM_W = 42
+HUB = 88
+NUT = 338          # where neck meets headstock
+HEAD = 104         # headstock length before scaling
+HEAD_SCALE = 1.45  # headstocks drawn big: they're what makes the spokes read as guitars
 
 
 def neck(angle: float, inline: bool) -> str:
@@ -60,8 +61,9 @@ def neck(angle: float, inline: bool) -> str:
         parts.append(f'<line x1="{HUB}" y1="{s * w0:.1f}" x2="{NUT}" y2="{s * w1:.1f}" stroke="{PALE}" stroke-width="1.6" opacity="0.7"/>')
     # Nut.
     parts.append(f'<rect x="{NUT - 3}" y="{-w1 - 1}" width="7" height="{2 * w1 + 2}" fill="{PALE}" stroke="{INK}" stroke-width="2"/>')
-    # Headstock.
-    n = NUT + 4
+    # Headstock, drawn in its own units from the nut and scaled up.
+    n = 0
+    w1 = 14
     if inline:
         # Six in line: straight lower edge, a swelling upper edge, a hooked tip.
         d = (f"M {n},{-w1} C {n + 30},{-w1 - 2} {n + 62},{-w1 - 6} {n + 88},{-w1 - 8} "
@@ -78,11 +80,16 @@ def neck(angle: float, inline: bool) -> str:
              f"C {n + 66},{30} {n + 26},{w1 + 4} {n},{w1} Z")
         tuners = [(n + 34 + i * 25, sgn * (17 + i * 3)) for sgn in (-1, 1) for i in range(3)]
         buttons = [(x, y + (12 if y > 0 else -12)) for x, y in tuners]
+    parts.append(f'<g transform="translate({NUT + 3},0) scale({HEAD_SCALE})">')
+    # A soft shadow lifts the headstock off the sea.
+    parts.append(f'<path d="{d}" transform="translate(3,4)" fill="{DEEP}" opacity="0.55"/>')
     for (bx, by) in buttons:
-        parts.append(f'<circle cx="{bx:.1f}" cy="{by:.1f}" r="6.5" fill="{CYAN}" stroke="{INK}" stroke-width="3"/>')
-    parts.append(f'<path d="{d}" fill="url(#head)" stroke="{INK}" stroke-width="6" stroke-linejoin="round"/>')
+        parts.append(f'<circle cx="{bx:.1f}" cy="{by:.1f}" r="6.8" fill="{LIME}" stroke="{INK}" stroke-width="3"/>')
+    parts.append(f'<path d="{d}" fill="url(#head)" stroke="{INK}" stroke-width="5.5" stroke-linejoin="round"/>')
+    parts.append(f'<path d="{d}" fill="none" stroke="{PALE}" stroke-width="1.6" transform="translate(1.5,1.5) scale(0.985)" opacity="0.9"/>')
     for (tx, ty) in tuners:
-        parts.append(f'<circle cx="{tx:.1f}" cy="{ty:.1f}" r="4.6" fill="{INK}"/>')
+        parts.append(f'<circle cx="{tx:.1f}" cy="{ty:.1f}" r="4.8" fill="{INK}"/>')
+    parts.append("</g>")
     parts.append("</g>")
     return "\n".join(parts)
 

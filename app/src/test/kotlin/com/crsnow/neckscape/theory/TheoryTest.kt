@@ -210,4 +210,19 @@ class TheoryTest {
         val (f, s) = scaleFor(chord("m"), preferFamily = 1, allowed = Level.Beginner::allowsScale)!!
         assertEquals("Aeolian (Natural Minor)", Scales.families[f].scales[s].name)
     }
+
+    @Test fun `CAGED positions tile the neck in order`() {
+        fun row(root: String, minor: Boolean) = cagedPositions(Note.parse(root).pitchClass, minor, 22)
+            .joinToString(" ") { "${it.shape}${it.offset}" }
+        assertEquals("C0 A3 G5 E8 D10 C12 A15 G17 E20", row("C", false))
+        assertEquals("G0 E3 D5 C7 A10 G12 E15 D17 C19", row("G", false))
+        // The moved shapes are the real chords: C as an A shape is x35553, as an E shape 8 10 10 9 8 8.
+        val c = cagedPositions(0, false, 22)
+        assertEquals("x35553", c.first { it.shape == CagedShape.A }.voicing.tab)
+        assertEquals("8 10 10 9 8 8", c.first { it.shape == CagedShape.E }.voicing.tab)
+        assertEquals("x02210", cagedPositions(9, true, 22).first { it.shape == CagedShape.A }.voicing.tab)
+        assertEquals(2..5, c.first { it.shape == CagedShape.A }.frets)
+        assertTrue(Tunings.all.first().isStandardShape())
+        assertTrue(!Tunings.all.first { it.name == "DADGAD" }.isStandardShape())
+    }
 }

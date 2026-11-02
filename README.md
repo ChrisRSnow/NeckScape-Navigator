@@ -18,6 +18,10 @@ apps built from the same code.
   scales). Notes are coloured by degree and numbered in playing order; the
   diatonic triads/sevenths sit underneath (tap one to jump to it — the scale
   follows, so Dm from C Ionian becomes D Dorian).
+- **CAGED** (Intermediate and Advanced, standard tuning) — the five shapes marked
+  up the neck for any scale, arpeggio or chord, major or minor; pick one to see that
+  position, with its chord shape ringed (or played, in Chord view, with ‹ › stepping
+  C → A → G → E → D up the neck). Score, tab, PDF and playback follow the position.
 - **Arpeggio view** — the chord's tones across the neck, numbered and played
   up and down like a scale (shares the chord with Chord view).
 - **Chord view** — 106 chord types. Every chord tone on the neck, then step

@@ -13,7 +13,11 @@ import com.crsnow.neckscape.song.Tab
 import com.crsnow.neckscape.song.barsOf
 import com.crsnow.neckscape.song.schedule
 import com.crsnow.neckscape.theory.ChordSymbol
+import com.crsnow.neckscape.theory.CagedPosition
 import com.crsnow.neckscape.theory.Interval
+import com.crsnow.neckscape.theory.cagedPositions
+import com.crsnow.neckscape.theory.isMinorQuality
+import com.crsnow.neckscape.theory.isStandardShape
 import com.crsnow.neckscape.theory.Level
 import com.crsnow.neckscape.theory.Note
 import com.crsnow.neckscape.theory.Position
@@ -100,6 +104,8 @@ data class UiState(
     val capo: Int = 0,
     /** How many pushed changes Undo can take back. */
     val undoDepth: Int = 0,
+    /** The CAGED position picked (index into [cagedPositions]), or -1 for all of them. */
+    val cagedPick: Int = -1,
 ) {
     val family: ScaleFamily get() = Scales.families[familyIndex]
     val scale: Scale get() = family.scales[scaleIndex]
@@ -113,8 +119,26 @@ data class UiState(
     /** Seventh chords are past Beginner, so the switch only counts above it. */
     val sevenths: Boolean get() = diatonicSevenths && level != Level.Beginner
 
+    /** The frets in view: a picked CAGED position's window, else the slider range. */
     val fretRange: IntRange
-        get() = fretFrom.coerceIn(0, fretCount).let { from -> from..fretTo.coerceIn(from, fretCount) }
+        get() = cagedSelected?.frets ?: fretFrom.coerceIn(0, fretCount).let { from -> from..fretTo.coerceIn(from, fretCount) }
+
+    /** CAGED shapes are offered from Intermediate up, in standard tuning (or one shifted down/up), for scales and chords. */
+    val cagedEnabled: Boolean
+        get() = level != Level.Beginner && baseTuning.isStandardShape() &&
+            viewMode in setOf(ViewMode.Scale, ViewMode.Arpeggio, ViewMode.Chord)
+
+    /** The five shapes up the neck for the current root and quality; empty when CAGED doesn't apply. */
+    val cagedPositions: List<CagedPosition>
+        get() {
+            if (!cagedEnabled) return emptyList()
+            // Shapes are relative to the open strings: E standard, or a whole tuning shifted (E♭ standard, a capo).
+            val shift = tuning.midi[0] - 40
+            val minor = isMinorQuality(if (viewMode == ViewMode.Scale) scale.intervals else chord.intervals)
+            return cagedPositions(Math.floorMod(root.pitchClass - shift, 12), minor, fretCount)
+        }
+
+    val cagedSelected: CagedPosition? get() = if (cagedPick < 0) null else cagedPositions.getOrNull(cagedPick)
 
     /** String indices, lowest-pitched string = 0. */
     val stringRange: IntRange
@@ -126,9 +150,9 @@ data class UiState(
 
     val title: String
         get() = when (viewMode) {
-            ViewMode.Scale -> "${root.name} ${scale.name}"
+            ViewMode.Scale -> "${root.name} ${scale.name}" + (cagedSelected?.let { " · ${it.shape} shape" } ?: "")
             ViewMode.Arpeggio -> "${root.name} ${chord.name} arpeggio — ${chord.displayName(root)}"
-            ViewMode.Chord -> "${chord.displayName(root)} — ${root.name} ${chord.name}"
+            ViewMode.Chord -> "${chord.displayName(root)} — ${root.name} ${chord.name}" + (cagedSelected?.let { " · ${it.shape} shape" } ?: "")
             ViewMode.Song -> song?.title ?: overlay?.let { "${it.root.name} ${it.name}" } ?: "Nothing loaded"
         }
 
@@ -238,6 +262,15 @@ class NeckScapeViewModel : ViewModel() {
 
     fun setDisplay(display: Display) = edit { copy(display = display) }
 
+    /** Picks a CAGED position (index along the neck), or -1 to show the whole neck with every shape marked. */
+    fun setCaged(pick: Int) = edit { copy(cagedPick = pick) }
+
+    /** ‹ › through the CAGED positions in order up the neck. */
+    fun stepCaged(delta: Int) = edit {
+        val n = cagedPositions.size
+        if (n == 0) this else copy(cagedPick = Math.floorMod((if (cagedPick < 0) -1 else cagedPick) + delta, n))
+    }
+
     fun setLevel(level: Level) = edit { copy(level = level).fitLevel().respelled() }
 
     fun selectRoot(pitchClass: Int) = edit { copy(root = Note.bestSpelling(pitchClass, intervals)) }
@@ -271,7 +304,7 @@ class NeckScapeViewModel : ViewModel() {
     fun setFretCount(count: Int) = edit { copy(fretCount = count) }
 
     fun setFretRange(from: Int, to: Int) = edit {
-        copy(fretFrom = from, fretTo = if (to >= fretCount) TO_END else to)
+        copy(fretFrom = from, fretTo = if (to >= fretCount) TO_END else to, cagedPick = -1)
     }
 
     fun setStringRange(from: Int, to: Int) = edit {

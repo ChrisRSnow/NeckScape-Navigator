@@ -99,7 +99,12 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
             )
         }
     }
-    val voicing = voicings.getOrNull(state.voicingIndex)
+    // A picked CAGED position: its chord shape drives the neck (and is strummed) for plain major/minor triads,
+    // and is ringed inside the notes for scales, arpeggios and bigger chords.
+    val caged = state.cagedSelected
+    val cagedShape = caged?.voicing?.takeIf { v -> v.frets.all { it == null || it <= state.fretCount } }
+    val triad = state.chord.pitchSet.size == 3 && 7 in state.chord.pitchSet && (3 in state.chord.pitchSet || 4 in state.chord.pitchSet)
+    val voicing = if (state.viewMode == ViewMode.Chord && caged != null) cagedShape.takeIf { triad } else voicings.getOrNull(state.voicingIndex)
     val dots = remember(marks, state.tuning, state.fretRange, state.stringRange, voicing, state.showOrder) {
         buildDots(state.tuning, marks, state.fretRange, state.stringRange, voicing, state.showOrder)
     }
@@ -295,6 +300,7 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
+            if (state.cagedEnabled) CagedRow(state, vm)
             if (isSong) SongHeader(state)
             state.highlights?.let { h ->
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -376,6 +382,10 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                 modifier = Modifier.fillMaxWidth(),
                 sounding = sounding,
                 marked = state.highlights?.positions.orEmpty(),
+                regions = state.cagedPositions.mapIndexed { i, p ->
+                    Region(p.shape.name, p.frets, cagedColor(p.shape.name), selected = i == state.cagedPick)
+                },
+                outlined = if (voicing == null) cagedShape?.frets?.withIndex()?.mapNotNull { (str, f) -> f?.let { Position(str, it) } }?.toSet().orEmpty() else emptySet(),
                 onTap = { p ->
                     player?.playNote(state.tuning.midi[p.string] + p.fret)
                     vm.follow(listOf(setOf(p)), step = 0.6)
@@ -385,7 +395,12 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
             RangeControls(state, vm)
 
             when (state.viewMode) {
-                ViewMode.Chord -> VoicingBar(
+                ViewMode.Chord -> if (caged != null) VoicingBar(
+                    text = "CAGED ${caged.shape} shape  ·  frets ${caged.frets.first}–${caged.frets.last}" +
+                        (cagedShape?.let { "  ·  ${it.tab}" + if (triad) "" else " (triad shape ringed)" } ?: ""),
+                    enabled = true,
+                    onStep = vm::stepCaged,
+                ) else VoicingBar(
                     text = when {
                         voicings.isEmpty() -> "No playable shapes found"
                         voicing == null -> "All chord tones · ${voicings.size} shapes"
@@ -570,6 +585,30 @@ private fun Notation(music: Music, staves: Staves, highlight: (Tag) -> Color?) {
             } else {
                 SheetView(sheet, highlight = highlight)
             }
+        }
+    }
+}
+
+/** CAGED: every shape marked on the neck, or one position picked (frets, ringed chord shape). */
+@Composable
+private fun CagedRow(state: UiState, vm: NeckScapeViewModel) {
+    FlowRow(
+        Modifier.padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("CAGED", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = 4.dp))
+        FilterChip(selected = state.cagedPick < 0, onClick = { vm.setCaged(-1) }, label = { Text("All") })
+        state.cagedPositions.forEachIndexed { i, p ->
+            FilterChip(
+                selected = state.cagedPick == i,
+                onClick = { vm.setCaged(i) },
+                label = {
+                    Text(p.shape.name, color = cagedColor(p.shape.name), fontWeight = FontWeight.Bold)
+                    Text("  ${p.frets.first}–${p.frets.last}", style = MaterialTheme.typography.labelSmall)
+                },
+            )
         }
     }
 }

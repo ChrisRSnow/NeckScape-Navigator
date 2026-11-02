@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Size
@@ -68,6 +69,20 @@ fun degreeColor(interval: Interval): Color = when (interval.simpleDegree) {
     else -> Color(0xFF8E24AA)
 }
 
+/** A band above the neck naming a CAGED shape over its frets; [selected] draws it solid. */
+data class Region(val label: String, val frets: IntRange, val color: Color, val selected: Boolean)
+
+/** CAGED shape colours: C red, A orange, G green, E blue, D purple. */
+fun cagedColor(letter: String): Color = when (letter) {
+    "C" -> Color(0xFFE53935)
+    "A" -> Color(0xFFFB8C00)
+    "G" -> Color(0xFF43A047)
+    "E" -> Color(0xFF1E88E5)
+    else -> Color(0xFF8E24AA)
+}
+
+private val REGION_STRIP = 30.dp
+
 /**
  * A marker to draw: [step] is its place in the playing order, if numbered.
  * [faded] dots sit in the background (a scale overlay); [emphasis] makes a
@@ -116,24 +131,29 @@ fun Fretboard(
     sounding: Set<Position> = emptySet(),
     /** Notes marked by highlight_notes: a pink ring. */
     marked: Set<Position> = emptySet(),
+    /** CAGED shape bands above the neck. */
+    regions: List<Region> = emptyList(),
+    /** A chord shape inside the notes (the CAGED shape): a dark ring. */
+    outlined: Set<Position> = emptySet(),
     onTap: (Position) -> Unit = {},
 ) {
     val measurer = rememberTextMeasurer()
     val currentOnTap by rememberUpdatedState(onTap)
     val numberColor = MaterialTheme.colorScheme.onSurfaceVariant
     val width = OPEN_AREA + (1..fretCount).fold(0.dp) { acc, f -> acc + fretWidth(f) } + 8.dp
-    val height = EDGE * 2 + STRING_GAP * (tuning.strings - 1) + NUMBER_ROW
+    val top = EDGE + if (regions.isNotEmpty()) REGION_STRIP else 0.dp
+    val height = top + EDGE + STRING_GAP * (tuning.strings - 1) + NUMBER_ROW
 
     Box(modifier.horizontalScroll(rememberScrollState(), reverseScrolling = leftHanded)) {
         Canvas(
             Modifier
                 .size(width, height)
-                .pointerInput(tuning, fretCount, leftHanded) {
+                .pointerInput(tuning, fretCount, leftHanded, top) {
                     detectTapGestures { tap ->
                         val wirePx = wirePositions(fretCount)
                         val px = if (leftHanded) size.width - tap.x else tap.x
                         val fret = (0..fretCount).firstOrNull { px < wirePx[it] } ?: fretCount
-                        val fromTop = ((tap.y - EDGE.toPx()) / STRING_GAP.toPx()).roundToInt()
+                        val fromTop = ((tap.y - top.toPx()) / STRING_GAP.toPx()).roundToInt()
                         val string = tuning.strings - 1 - fromTop
                         if (string in 0 until tuning.strings) currentOnTap(Position(string, fret))
                     }
@@ -142,7 +162,7 @@ fun Fretboard(
             val wirePx = wirePositions(fretCount)
             fun x(px: Float) = if (leftHanded) size.width - px else px
             fun fretCenter(fret: Int) = if (fret == 0) OPEN_AREA.toPx() / 2 else (wirePx[fret - 1] + wirePx[fret]) / 2
-            fun stringY(string: Int) = EDGE.toPx() + (tuning.strings - 1 - string) * STRING_GAP.toPx()
+            fun stringY(string: Int) = top.toPx() + (tuning.strings - 1 - string) * STRING_GAP.toPx()
             // Half a string gap of wood beyond the outer strings, so their dots sit on the board.
             val boardTop = stringY(tuning.strings - 1) - STRING_GAP.toPx() / 2
             val boardBottom = stringY(0) + STRING_GAP.toPx() / 2
@@ -214,6 +234,24 @@ fun Fretboard(
                     drawCircle(dot.mark.color, badge, at, style = Stroke(1.dp.toPx()))
                     label(measurer, "$step", at, BadgeText, if (step < 100) 9f else 7f, bold = true)
                 }
+            }
+
+            // CAGED shapes: lettered bands above the neck, alternating lanes where neighbours overlap.
+            val anySelected = regions.any { it.selected }
+            regions.forEachIndexed { i, r ->
+                if (r.frets.first > fretCount) return@forEachIndexed
+                val from = if (r.frets.first == 0) 0f else wirePx[r.frets.first - 1] + 2.dp.toPx()
+                val to = wirePx[r.frets.last.coerceAtMost(fretCount)] - 2.dp.toPx()
+                val laneY = 3.dp.toPx() + (i % 2) * 13.dp.toPx()
+                val a = minOf(x(from), x(to))
+                val w = Math.abs(x(to) - x(from))
+                val color = if (!anySelected || r.selected) r.color else r.color.copy(alpha = 0.3f)
+                drawRoundRect(color, Offset(a, laneY), Size(w, 12.dp.toPx()), CornerRadius(6.dp.toPx()))
+                label(measurer, r.label, Offset(a + w / 2, laneY + 6.dp.toPx()), Color.White, 9f, bold = true)
+            }
+            for (p in outlined) {
+                if (p.fret > fretCount || p.string >= tuning.strings) continue
+                drawCircle(Color(0xFF212121), radius + 2.dp.toPx(), Offset(x(fretCenter(p.fret)), stringY(p.string)), style = Stroke(2.5f.dp.toPx()))
             }
 
             // Marked notes: a pink ring outside everything else.

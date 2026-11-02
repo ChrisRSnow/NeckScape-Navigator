@@ -107,4 +107,18 @@ class SnapshotTest {
         val bass = Tunings.all.indexOfFirst { it.name.contains("Bass") }
         pdf("pdf-bass-eb-major", UiState(root = Note.parse("Eb"), tuningIndex = bass, fretTo = 12), Display.Score, everything = true)
     }
+
+    @Test fun desktopCagedAll() = snapshot("desktop-caged-all", 1280, 1000, 1f) { it.setLevel(Level.Intermediate) }
+
+    @Test fun desktopCagedAShape() = snapshot("desktop-caged-a-shape", 1280, 1000, 1f) {
+        it.setLevel(Level.Intermediate)
+        it.setCaged(1)
+    }
+
+    @Test fun desktopCagedChord() = snapshot("desktop-caged-chord", 1280, 1100, 1f) {
+        it.setLevel(Level.Intermediate)
+        it.setViewMode(ViewMode.Chord)
+        it.selectRoot(7)
+        it.setCaged(3)
+    }
 }
