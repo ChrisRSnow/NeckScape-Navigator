@@ -17,18 +17,16 @@ data class NoteEvent(val midi: Int, val at: Double)
 enum class Instrument(val label: String) {
     Acoustic("Acoustic guitar"),
     Classical("Classical guitar"),
-    Electric("Electric (light overdrive)"),
+    Electric("Electric (overdrive)"),
     Piano("Piano"),
-    Synth("Synth (clean)"),
 }
 
 /**
  * Note synthesis in plain Kotlin. Guitars are Karplus–Strong plucked strings:
  * a burst of noise circulating in a delay line one period long, low-pass
  * filtered each pass, decays like a plucked string; the nylon and electric
- * strings change the pluck, the damping and (electric) add a soft overdrive.
- * The piano adds up slightly inharmonic, decaying partials; the synth is two
- * detuned saws through a low-pass filter.
+ * strings change the pluck, the damping and (electric) add an overdrive.
+ * The piano adds up slightly inharmonic, decaying partials.
  */
 object PluckSynth {
     const val SAMPLE_RATE = 44_100
@@ -57,7 +55,6 @@ object PluckSynth {
                 Instrument.Electric -> pluck(mix, start, samples, event.midi, random, smooth = 2, damp = 0.9984, brightness = 0.5f,
                     gain = 0.9f, pluckAt = 0.15, attackMs = 3.0)
                 Instrument.Piano -> piano(mix, start, samples, event.midi)
-                Instrument.Synth -> synth(mix, start, samples, event.midi)
             }
         }
         if (instrument == Instrument.Electric) overdrive(mix)
@@ -141,18 +138,31 @@ object PluckSynth {
         }
     }
 
-    /** Overdrive on the whole mix, so chords grit up together like through an amp, then a speaker-ish roll-off. */
+    /**
+     * A crunchy overdrive on the whole mix, so chords grit up together like
+     * through an amp: tighten the lows, boost the mids into an asymmetric
+     * clipper (odd and even harmonics), then a speaker-cabinet roll-off.
+     */
     private fun overdrive(mix: FloatArray) {
         val peak = mix.maxOf { abs(it) }.coerceAtLeast(1e-6f)
-        val drive = 2.6f
-        val norm = tanh(drive.toDouble()).toFloat()
-        var lp = 0f
-        val a = 0.45f // one-pole low-pass, ~5 kHz
+        val drive = 9f
+        val bias = 0.22f
+        val offset = tanh(bias.toDouble()).toFloat()
+        var low = 0f
+        var cab1 = 0f
+        var cab2 = 0f
+        var dc = 0f
+        val aLow = 0.03f   // ~200 Hz: what's taken out before the clipper
+        val aCab = 0.33f   // ~3 kHz, two poles: the speaker
         for (i in mix.indices) {
             val x = mix[i] / peak
-            val y = tanh((drive * x + 0.08f * x * x).toDouble()).toFloat() / norm
-            lp += a * (y - lp)
-            mix[i] = lp
+            low += aLow * (x - low)
+            val tight = x - 0.7f * low
+            val y = tanh((drive * tight + bias).toDouble()).toFloat() - offset
+            dc += 0.0005f * (y - dc) // the bias leaves an offset; take it back out
+            cab1 += aCab * (y - dc - cab1)
+            cab2 += aCab * (cab1 - cab2)
+            mix[i] = cab2 + 0.25f * low // a little clean low end under the crunch
         }
     }
 
@@ -165,11 +175,19 @@ object PluckSynth {
         val f0 = freq(midi)
         val b = 0.00012 * 2.0.pow((midi - 48) / 24.0) // inharmonicity grows up the keyboard
         val base = 3.2 * 2.0.pow(-(midi - 48) / 30.0) // low notes sustain longer
-        val partials = (1..14).filter { n -> n * f0 * sqrt(1 + b * n * n) < 9_000 }
+        val partials = (1..24).filter { n -> n * f0 * sqrt(1 + b * n * n) < 9_000 }
+        // Low notes carry most of their sound in the overtones (and small speakers can't play
+        // a 40–120 Hz fundamental anyway), so weight partials away from the very bottom and
+        // level each note's overall strength, so the bass end isn't silent.
+        fun weight(n: Int): Double {
+            val f = n * f0
+            return (1.0 / n.toDouble().pow(0.85)) * (f * f / (f * f + 220.0 * 220.0))
+        }
+        val level = 0.9 / sqrt(partials.sumOf { weight(it).pow(2) })
         val attack = exp(-1.0 / (0.002 * SAMPLE_RATE))
         for (n in partials) {
             val fn = n * f0 * sqrt(1 + b * n * n)
-            val amp = (1.0 / n.toDouble().pow(1.1)) * if (n == 1) 1.0 else 0.85
+            val amp = weight(n) * level
             // Envelopes and oscillators run as recurrences (a multiply per sample), not exp/sin calls.
             val fast = exp(-1.0 / (base * 0.18 / n.toDouble().pow(0.6) * SAMPLE_RATE))
             val slow = exp(-1.0 / (base / n.toDouble().pow(0.7) * SAMPLE_RATE))
@@ -194,45 +212,6 @@ object PluckSynth {
                 }
             }
         }
-    }
-
-    /** Two detuned band-limited saws, low-passed, with a soft attack, decay to sustain and release. */
-    private fun synth(mix: FloatArray, start: Int, samples: Int, midi: Int) {
-        val f = freq(midi)
-        val incs = doubleArrayOf(f * 2.0.pow(-4 / 1200.0) / SAMPLE_RATE, f * 2.0.pow(4 / 1200.0) / SAMPLE_RATE)
-        val phases = doubleArrayOf(0.0, 0.37)
-        // Cutoff a few octaves above the note, capped, so it stays smooth ("clean").
-        val cutoff = (f * 6).coerceIn(600.0, 3_200.0)
-        val a = (1 - exp(-2 * PI * cutoff / SAMPLE_RATE)).toFloat()
-        var lp1 = 0f
-        var lp2 = 0f
-        val release = (0.25 * SAMPLE_RATE).toInt()
-        for (i in 0 until samples) {
-            val pos = start + i
-            if (pos >= mix.size) break
-            var s = 0.0
-            for (k in 0..1) {
-                val p = phases[k]
-                var saw = 2 * p - 1
-                saw -= polyBlep(p, incs[k])
-                s += saw
-                phases[k] = (p + incs[k]).let { if (it >= 1) it - 1 else it }
-            }
-            lp1 += a * (s.toFloat() * 0.5f - lp1)
-            lp2 += a * (lp1 - lp2)
-            val t = i.toFloat() / SAMPLE_RATE
-            val attack = (t / 0.012f).coerceAtMost(1f)
-            val decay = 0.7f + 0.3f * exp(-t / 0.35f)
-            val rel = ((samples - i).toFloat() / release).coerceAtMost(1f)
-            mix[pos] += lp2 * attack * decay * rel * 0.6f
-        }
-    }
-
-    /** PolyBLEP correction: takes the aliasing edge off a naive sawtooth's jump. */
-    private fun polyBlep(t: Double, dt: Double): Double = when {
-        t < dt -> (t / dt).let { x -> x + x - x * x - 1 }
-        t > 1 - dt -> ((t - 1) / dt).let { x -> x * x + x + x + 1 }
-        else -> 0.0
     }
 
     /** Low to high, a strum's worth apart — how a chord shape sounds when strummed. */

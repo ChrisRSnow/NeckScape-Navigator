@@ -136,5 +136,10 @@ class SnapshotTest {
             val pcm = PluckSynth.render(scale + chord, ring = 1.8, instrument = instrument)
             writeWav(File(dir, "sound-${instrument.name.lowercase()}.wav"), pcm, PluckSynth.SAMPLE_RATE)
         }
+        // Beginner's C major run from the low E string, one note every 0.4 s: the piano's low notes must be heard.
+        val run = listOf(40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67).mapIndexed { i, m -> com.crsnow.neckscape.theory.NoteEvent(m, i * 0.4) }
+        for (instrument in com.crsnow.neckscape.theory.Instrument.entries) {
+            writeWav(File(dir, "run-${instrument.name.lowercase()}.wav"), PluckSynth.render(run, ring = 1.6, instrument = instrument), PluckSynth.SAMPLE_RATE)
+        }
     }
 }

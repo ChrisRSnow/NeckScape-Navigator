@@ -441,7 +441,7 @@ def build_server():
     @mcp.tool()
     def playback(action: str = "play", section: str | None = None, tempo_pct: float | None = None, sound: str | None = None, target: str | None = None) -> dict:
         """Plays, loops or stops the loaded progression/tab; optionally one section, at tempo_pct of its tempo,
-        with a sound: acoustic, classical, electric, piano or synth."""
+        with a sound: acoustic, classical, electric or piano."""
         return call("playback", {"action": action, "section": section, "tempo_pct": tempo_pct, "sound": sound}, target)
 
     @mcp.tool()

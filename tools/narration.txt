@@ -2,7 +2,7 @@
 # calls narrate("id"); scenes wait for it to finish. Write for the ear: spell out
 # symbols ("seven sharp nine", "chord two") and avoid abbreviations.
 intro|This is Neck Scape Navigator: a quick tour of scales, modes and chords on the guitar fretboard, made with teachers in mind.
-level_beginner|First, pick a level. Beginner keeps it simple: major and minor scales, chords and arpeggios, and nothing else to get lost in.
+level_beginner|First, pick a level. Beginner opens on the first four frets, with just the major and minor scales, chords and arpeggios, so there's nothing to get lost in.
 level_more|Intermediate adds extended chords and the modes, and Advanced opens up everything else.
 whole|Here's C major, on every string and every fret. The colours follow the scale degree. The root is red, the third is orange, and the fifth is blue. So a shape looks the same in every key.
 intervals|One tap swaps the note names for intervals, so students see what each note does in the scale, not just what it's called.
@@ -13,10 +13,12 @@ hear|Press play, and the scale runs up and back down. The ring shows which note 
 tempo_slow|The tempo slider sets the playback speed. Take it slowly at first, while the fingering is worked out.
 tempo_drag|Then drag it up, as it gets under the fingers.
 tempo_fast|Here it is at two hundred beats per minute.
+sounds|Playback has four sounds: an acoustic guitar, a finger picked classical guitar, a crunchy overdriven electric, and a piano.
 arpeggio|Arpeggios work the same way. Here's A minor, in the same position, numbered and played up and back down.
 score|Any of these can be shown as standard notation. The note that's sounding lights up as it plays.
 tab|Or as tab, with the fret for every note.
 strings|The string slider narrows the view too. Here it's just the top three strings, which is handy for triad shapes.
+caged|From Intermediate up, the CAGED system is built in. The five shapes are marked along the neck, and picking one shows that position, with its chord shape ringed. C, A, G, E, and D.
 key|Every seven note scale is harmonised for you, with Roman numerals.
 sevenths|Switch on sevenths, and you get the seventh chords of the key.
 tapchord|Tap chord two, and you get D minor seven, with every chord tone shown on the neck.

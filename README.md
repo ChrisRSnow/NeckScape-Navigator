@@ -52,8 +52,8 @@ apps built from the same code.
 - **PDF** — saves the current view, or the neck, chord boxes, score and tab on
   one handout. Vector output from a small built-in PDF writer, identical on
   every platform; Android saves through the system document picker.
-- **Sounds** — acoustic, classical (nylon), electric with a light overdrive, piano and
-  a clean synth, all synthesised in plain Kotlin (no samples); pick one beside the
+- **Sounds** — acoustic, finger-picked classical (nylon), overdriven electric and piano,
+  all synthesised in plain Kotlin (no samples); pick one beside the
   tempo slider (or ask your AI: `playback` takes a `sound`).
 - 11 preset tunings (guitar, 7-string, bass, ukulele) plus per-string custom
   tuning; notes or interval labels; 12–24 frets; left-handed mode.

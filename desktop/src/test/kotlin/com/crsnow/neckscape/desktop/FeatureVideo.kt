@@ -43,6 +43,7 @@ import com.crsnow.neckscape.bridge.SettingsStore
 import com.crsnow.neckscape.song.Json
 import com.crsnow.neckscape.song.schedule
 import com.crsnow.neckscape.theory.Chords
+import com.crsnow.neckscape.theory.Instrument
 import com.crsnow.neckscape.theory.Level
 import com.crsnow.neckscape.theory.NoteEvent
 import com.crsnow.neckscape.theory.PluckSynth
@@ -93,7 +94,7 @@ class FeatureVideo {
     private val height = 1080
     private val appWidth = 1440
     private val density = 1.08f
-    private val steps = 20
+    private val steps = 22
 
     @Test fun render() {
         assumeTrue(System.getProperty("neckscape.video") == "1")
@@ -156,7 +157,11 @@ class FeatureVideo {
         private var time = 0.0
         private var clock = 0L
         private var frame = 0
-        private val audio = mutableListOf<NoteEvent>()
+        private val audio = mutableListOf<Pair<NoteEvent, Instrument>>()
+        /** The sound new notes are played with (the app's Sound picker, kept in step). */
+        private var instrument = Instrument.Acoustic
+        private var stepNo = 0
+        private fun nextStep() = ++stepNo
         private val voiceDir = File(System.getProperty("neckscape.narrationDir") ?: "build/narration")
         private val voices = mutableListOf<Pair<Double, ShortArray>>() // start time, 44.1 kHz PCM
         private var voiceEnds = 0.0
@@ -203,7 +208,7 @@ class FeatureVideo {
 
         /** Queues sound starting now. */
         private fun sound(events: List<NoteEvent>) {
-            audio += events.map { it.copy(at = it.at + time) }
+            audio += events.map { it.copy(at = it.at + time) to instrument }
         }
 
         /** Waits for the background voicing search to finish for the current chord. */
@@ -330,8 +335,8 @@ class FeatureVideo {
             vm.setLevel(Level.Beginner)
             say(Caption(
                 "Pick a level",
-                "Beginner: major and minor scales, chords and arpeggios — nothing else to get lost in.",
-                step = 1,
+                "Beginner opens on the first four frets, with major and minor scales, chords and arpeggios — nothing else to get lost in.",
+                step = nextStep(),
             ))
             hold(2.0)
             narrate("level_more")
@@ -346,7 +351,7 @@ class FeatureVideo {
             say(Caption(
                 "The whole scale, the whole neck",
                 "C major (Ionian) on every string and fret.\n\nColours follow the scale degree — root red, 3rd orange, 5th blue — so a shape looks the same in every key.",
-                step = 2,
+                step = nextStep(),
             ))
             hold(2.0)
 
@@ -355,7 +360,7 @@ class FeatureVideo {
             say(Caption(
                 "Note names or intervals",
                 "One tap swaps note names for intervals — R, 2, 3, 4 …\n\nStudents see what each note does in the scale, not just what it's called.",
-                step = 3,
+                step = nextStep(),
             ))
             hold(2.0)
 
@@ -364,7 +369,7 @@ class FeatureVideo {
             say(Caption(
                 "Every mode, from any root",
                 "C Dorian: same root, new colours — the ♭3 and ♭7 stand out straight away.\n\nModes of major, melodic minor, harmonic minor and more — over 100 scales in all.",
-                step = 4,
+                step = nextStep(),
             ))
             hold(2.0)
             narrate("lydian")
@@ -381,7 +386,7 @@ class FeatureVideo {
             say(Caption(
                 "One position at a time",
                 "A minor pentatonic, frets 5–8: the fret slider narrows the neck to a single box.\n\nThe small numbers give the order to play it in, string by string.",
-                step = 5,
+                step = nextStep(),
             ))
             hold(2.0)
 
@@ -390,7 +395,7 @@ class FeatureVideo {
             say(Caption(
                 "Hear it — and follow it",
                 "Press Play: the scale runs up and back down, and the ring shows which note is sounding.\n\nGood for ear training and for checking fingering.",
-                step = 6,
+                step = nextStep(),
                 listening = true,
             ))
             hold(1.8)
@@ -402,7 +407,7 @@ class FeatureVideo {
             say(Caption(
                 "Set the tempo",
                 "The Tempo slider, under the fretboard, sets the playback speed.\n\nSlow — ♩ = 70 — for working out the fingering …",
-                step = 7,
+                step = nextStep(),
                 listening = true,
             ))
             hold(2.5)
@@ -425,13 +430,29 @@ class FeatureVideo {
             playScale()
             hold(1.0)
 
+            narrate("sounds")
+            vm.setTempo(170)
+            say(Caption("Four sounds", "Pick the playback sound beside the tempo slider.", step = nextStep(), listening = true))
+            hold(1.2)
+            for (sound in Instrument.entries) {
+                instrument = sound
+                vm.setInstrument(sound)
+                say(caption.value.copy(body = "Pick the playback sound beside the tempo slider.\n\n${sound.label}"))
+                hold(0.4)
+                playScale(limit = 8)
+                hold(0.9)
+            }
+            instrument = Instrument.Acoustic
+            vm.setInstrument(Instrument.Acoustic)
+            untilQuiet()
+
             narrate("arpeggio")
             vm.setViewMode(ViewMode.Arpeggio)
             vm.setTempo(120)
             say(Caption(
                 "Arpeggios",
                 "Am arpeggio in the same position: numbered, and played up and back down like the scales.",
-                step = 8,
+                step = nextStep(),
                 listening = true,
             ))
             hold(1.5)
@@ -446,7 +467,7 @@ class FeatureVideo {
             say(Caption(
                 "Score and tab",
                 "The same notes in standard notation — the note that's sounding lights up as it plays.",
-                step = 9,
+                step = nextStep(),
                 listening = true,
             ))
             hold(1.2)
@@ -467,9 +488,32 @@ class FeatureVideo {
             say(Caption(
                 "Focus on a few strings",
                 "The string slider limits the view too — here the top three strings, frets 0–12.\n\nUseful for triad shapes and single-string work.",
-                step = 10,
+                step = nextStep(),
             ))
             hold(2.0)
+
+            narrate("caged")
+            vm.setStringRange(0, state.tuning.strings - 1)
+            vm.setFretRange(0, state.fretCount)
+            vm.selectFamily(family("Major (diatonic)"))
+            vm.selectScale(0)
+            vm.selectRoot(0)
+            vm.setLevel(Level.Intermediate)
+            say(Caption(
+                "CAGED positions",
+                "From Intermediate up, the five CAGED shapes are marked up the neck.",
+                step = nextStep(),
+            ))
+            hold(2.6)
+            for (i in 0..4) {
+                vm.setCaged(i)
+                val p = state.cagedSelected!!
+                say(caption.value.copy(body = "From Intermediate up, the five CAGED shapes are marked up the neck.\n\nPick one to see that position, its chord shape ringed: ${p.shape} shape, frets ${p.frets.first}–${p.frets.last}."))
+                hold(1.6)
+            }
+            untilQuiet()
+            vm.setCaged(-1)
+            vm.setLevel(Level.Advanced)
 
             narrate("key")
             vm.setFretRange(0, state.fretCount)
@@ -479,7 +523,7 @@ class FeatureVideo {
             say(Caption(
                 "The chords of the key",
                 "Every seven-note scale is harmonised for you, with Roman numerals:\nI  ii  iii  IV  V  vi  vii°",
-                step = 11,
+                step = nextStep(),
             ))
             hold(2.0)
             narrate("sevenths")
@@ -494,7 +538,7 @@ class FeatureVideo {
             say(Caption(
                 "Tap a chord to see it",
                 "Tap ii and you get Dm7: every chord tone on the neck …",
-                step = 12,
+                step = nextStep(),
             ))
             hold(2.0)
             narrate("shapes")
@@ -512,7 +556,7 @@ class FeatureVideo {
             say(Caption(
                 "106 chord types",
                 "From triads and sixths to 13ths and altered dominants.\n\nHere E7♯9 — the “Hendrix chord”.",
-                step = 13,
+                step = nextStep(),
                 listening = true,
             ))
             hold(2.0)
@@ -527,7 +571,7 @@ class FeatureVideo {
             say(Caption(
                 "Scales and chords stay linked",
                 "Choose Cm7 …",
-                step = 14,
+                step = nextStep(),
             ))
             hold(1.0)
             untilQuiet(gap = 0.1)
@@ -543,7 +587,7 @@ class FeatureVideo {
             say(Caption(
                 "Any tuning",
                 "D major in DADGAD.\n\nPresets for drop D, open G, 7-string, bass and ukulele — or retune any string yourself. Notes, numbers and chord shapes all follow.",
-                step = 15,
+                step = nextStep(),
             ))
             hold(2.0)
             narrate("ukulele")
@@ -559,7 +603,7 @@ class FeatureVideo {
             say(Caption(
                 "Print a handout",
                 "PDF saves the current view — fretboard, score or tab — or all three on one page, ready to print.",
-                step = 16,
+                step = nextStep(),
             ))
             hold(1.5)
             pdfPage.value = pdfOfScreen(everything = true)
@@ -578,7 +622,7 @@ class FeatureVideo {
             say(Caption(
                 "Ask your AI",
                 "Claude Code, Codex or any MCP client can drive the app on this computer — or on a phone over USB.\n\n“Show me the chords for House of the Rising Sun.”",
-                step = 17,
+                step = nextStep(),
             ))
             type("> Show me the chords for House of the Rising Sun in Neckscape", 1.2)
             tool("load_progression(House of the Rising Sun)", "load_progression", mapOf("progression" to wrongF))
@@ -593,7 +637,7 @@ class FeatureVideo {
             hold(0.5)
 
             narrate("ai_overlay")
-            say(Caption("A scale over the chords", "“Put A minor pentatonic, position 5, over it.”\n\nThe scale sits behind the chord shapes, roots picked out.", step = 18))
+            say(Caption("A scale over the chords", "“Put A minor pentatonic, position 5, over it.”\n\nThe scale sits behind the chord shapes, roots picked out.", step = nextStep()))
             type("> Put A minor pentatonic, position 5, over it", 1.0)
             tool("show_scale(A minor_pentatonic, frets 5–8, overlay)", "show_scale", mapOf(
                 "scale" to mapOf("schema_version" to "1.0", "type" to "scale", "root" to "A", "scale" to "minor_pentatonic",
@@ -604,7 +648,7 @@ class FeatureVideo {
 
             narrate("ai_tab")
             terminal.value = emptyList()
-            say(Caption("Tabs from your library", "“Tab me the refrain of Greensleeves.”\n\nThe assistant finds it in your tab library and the app opens it at the right bar.", step = 19, listening = true))
+            say(Caption("Tabs from your library", "“Tab me the refrain of Greensleeves.”\n\nThe assistant finds it in your tab library and the app opens it at the right bar.", step = nextStep(), listening = true))
             type("> Tab me the refrain of Greensleeves", 1.0)
             val green = File("../demo/library/Traditional - Greensleeves.musicxml").readText()
             type("  ⏺ neckscape · find_tab(song=\"Greensleeves\", part=\"refrain\")", 0.5)
@@ -634,7 +678,7 @@ class FeatureVideo {
             say(Caption(
                 "Your files, in and out",
                 "Open Guitar Pro, MusicXML, MIDI, ChordPro and text tabs — notes are placed on the neck for you.\n\nSave any view as PDF or MIDI. Here: Greensleeves saved as MIDI and opened again.",
-                step = 20,
+                step = nextStep(),
             ))
             hold(3.0)
             untilQuiet()
@@ -653,7 +697,11 @@ class FeatureVideo {
             File(out, "frames.ffconcat").writeText(concat.toString())
 
             val rate = PluckSynth.SAMPLE_RATE
-            val music = PluckSynth.render(audio, ring = 2.5)
+            // Each sound rendered on its own, then summed (they rarely overlap).
+            val parts = audio.groupBy({ it.second }, { it.first }).map { (sound, notes) -> PluckSynth.render(notes, ring = 2.5, instrument = sound) }
+            val music = ShortArray(parts.maxOf { it.size }) { i ->
+                parts.sumOf { p -> if (i < p.size) p[i].toInt() else 0 }.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            }
             val total = maxOf((time * rate).toInt(), music.size)
             // Duck the guitar under the voice, easing in and out (~60 ms) so it doesn't pump.
             val target = FloatArray(total) { 0.9f }
@@ -750,15 +798,15 @@ class FeatureVideo {
         }
     }
 
+    private val logo by lazy {
+        org.jetbrains.skia.Image.makeFromEncoded(File("../icons/neckscape-1024.png").readBytes()).toComposeImageBitmap()
+    }
+
     @Composable
     private fun TitleCard(c: Caption) {
         Box(Modifier.fillMaxSize().background(Color(0xFF1F1B2E)), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    for (color in listOf(0xFFE53935, 0xFFFB8C00, 0xFF1E88E5, 0xFF8E24AA)) {
-                        Box(Modifier.size(22.dp).background(Color(color), CircleShape))
-                    }
-                }
+                Image(logo, contentDescription = null, modifier = Modifier.size(260.dp))
                 Spacer(Modifier.height(28.dp))
                 Text(c.title, color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(20.dp))
