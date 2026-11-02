@@ -92,7 +92,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        handleLoad(intent)
+        // Only a fresh launch: after a rotation the same intent comes back and would load twice.
+        if (savedInstanceState == null) handleLoad(intent)
     }
 
     override fun onNewIntent(intent: Intent) {

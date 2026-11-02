@@ -134,7 +134,7 @@ class BridgeServer(
         val input = BufferedInputStream(s.getInputStream())
         val out = s.getOutputStream()
         val req = try {
-            read(input)
+            read(input, out)
         } catch (e: TooLarge) {
             return@use respond(out, 413, error("INVALID_SCHEMA", "Payload over ${MAX_BODY / 1024 / 1024} MB"))
         } catch (_: Exception) {
@@ -142,7 +142,10 @@ class BridgeServer(
         }
         val loopback = s.inetAddress.isLoopbackAddress
         if (req.headers.containsKey("origin")) return@use respond(out, 403, error("AUTH_FAILED", "Browser requests aren't accepted"))
-        val host = req.headers["host"]?.substringBeforeLast(':')?.trim('[', ']')?.lowercase()
+        // "127.0.0.1:47621", "localhost", "[::1]:47621" or "[::1]" → the host part.
+        val host = req.headers["host"]?.lowercase()?.let { h ->
+            if (h.startsWith("[")) h.substringAfter('[').substringBefore(']') else h.substringBefore(':')
+        }
         if (loopback && host != null && host !in setOf("127.0.0.1", "localhost", "::1")) {
             return@use respond(out, 403, error("AUTH_FAILED", "Unexpected Host header"))
         }
@@ -190,7 +193,7 @@ class BridgeServer(
 
     private class TooLarge : Exception()
 
-    private fun read(input: InputStream): Request {
+    private fun read(input: InputStream, continueStream: OutputStream? = null): Request {
         var lines = 0
         val headers = HashMap<String, String>()
         var requestLine: String? = null
@@ -206,6 +209,10 @@ class BridgeServer(
         val length = headers["content-length"]?.toLongOrNull() ?: 0
         if (length > MAX_BODY) throw TooLarge()
         if (headers["transfer-encoding"] != null) throw IllegalStateException("Chunked bodies aren't supported")
+        // curl asks before sending a big body; say go ahead rather than leaving it to time out.
+        if (headers["expect"].equals("100-continue", ignoreCase = true)) {
+            continueStream?.let { it.write("HTTP/1.1 100 Continue\r\n\r\n".toByteArray(Charsets.ISO_8859_1)); it.flush() }
+        }
         val body = ByteArray(length.toInt())
         var got = 0
         while (got < body.size) {

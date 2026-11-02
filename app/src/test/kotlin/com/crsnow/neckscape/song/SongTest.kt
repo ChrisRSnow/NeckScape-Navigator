@@ -153,4 +153,41 @@ class SongTest {
         assertTrue(events[2].notes.isEmpty())
         assertNotNull(Importers.formatFor("x.mxl"))
     }
+
+    @Test fun `a midi note just before a barline lands in the next bar instead of crashing`() {
+        // 3.99 quarters rounds to 4.0: the start of bar 2, not the end of bar 1.
+        val bytes = Midi.write(listOf(MidiNote(0.0, 1.0, 52), MidiNote(3.99, 1.0, 55)), "Edge", 100.0, TimeSignature(4, 4))
+        val tab = Midi.read(bytes, "edge.mid", null, null, std).song as Tab
+        assertEquals(2, tab.measures.size)
+        assertEquals(0.0, tab.measures[1].events.single().at, 1e-9)
+    }
+
+    @Test fun `a bend on one string doesn't swallow the next note on another`() {
+        val text = """
+            e|--7b9-----|
+            B|----8-----|
+            G|----------|
+            D|----------|
+            A|----------|
+            E|----------|
+        """.trimIndent()
+        val notes = (AsciiTabImporter.read(text, "t.txt", std).song as Tab).measures.flatMap { m -> m.events.flatMap { it.notes } }
+        assertEquals(listOf("1:7", "2:8"), notes.map { "${it.string}:${it.fret}" })
+        assertEquals("bend", notes[0].technique?.type)
+    }
+
+    @Test fun `chordpro bracketed part names start sections`() {
+        val p = ChordProImporter.read("[Verse]\n[G]a [C]b\n[Chorus]\n[D]c\n", "x.cho", std).song as Progression
+        assertEquals(listOf("Verse", "Chorus"), p.sections.map { it.name })
+    }
+
+    @Test fun `musicxml tied notes ring on rather than re-plucking`() {
+        val xml = """<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>Gtr</part-name></score-part></part-list>
+            <part id="P1"><measure number="1"><attributes><divisions>1</divisions></attributes>
+            <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><tie type="start"/></note>
+            <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><tie type="stop"/></note>
+            </measure></part></score-partwise>"""
+        val events = (MusicXmlImporter.read(xml.toByteArray(), "t.xml", null, null).song as Tab).measures[0].events
+        assertEquals(1, events.sumOf { it.notes.size })
+    }
 }

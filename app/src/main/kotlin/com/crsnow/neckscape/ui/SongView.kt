@@ -38,6 +38,7 @@ import com.crsnow.neckscape.theory.Note
 import com.crsnow.neckscape.theory.Position
 import com.crsnow.neckscape.theory.Scales
 import com.crsnow.neckscape.theory.Voicing
+import com.crsnow.neckscape.theory.spell
 import com.crsnow.neckscape.theory.thereAndBack
 
 /** Tab notes have no scale degree to colour by, so they share one colour. */
@@ -74,10 +75,12 @@ fun songDots(state: UiState): Pair<List<Dot>, Set<Int>> {
         is Progression -> {
             val symbol = state.songChord ?: return emptyList<Dot>() to emptySet()
             val parsed = ChordSymbol.parse(symbol) ?: return emptyList<Dot>() to emptySet()
-            val v = song.voicingFor(symbol, tuning, state.fretCount) ?: return emptyList<Dot>() to emptySet()
+            // With a capo, symbols are shapes relative to it: name the notes as the shape does.
+            val shapes = state.baseTuning
+            val v = song.voicingFor(symbol, shapes, state.fretCount) ?: return emptyList<Dot>() to emptySet()
             val marks = chordMarks(parsed, state.labelMode)
             val dots = v.positions().map { p ->
-                Dot(p, marks[tuning.pitchClassAt(p.string, p.fret)] ?: NoteMark("?", Color.Gray))
+                Dot(p, marks[shapes.pitchClassAt(p.string, p.fret)] ?: NoteMark("?", Color.Gray))
             }
             dots to v.frets.withIndex().filter { it.value == null }.map { it.index }.toSet()
         }
@@ -108,11 +111,12 @@ fun overlayDots(state: UiState, overlay: ScaleOverlay, alone: Boolean): List<Dot
     val frets = overlay.fretRange ?: state.fretRange
     val chordTones = overlay.chordTonesOf?.let { ChordSymbol.parse(it) }?.pitchClasses.orEmpty()
     val degree = overlay.intervals.associateBy { (overlay.root.pitchClass + it) % 12 }
-    val named = overlay.scale?.let { (f, s) -> Scales.families[f].scales[s].intervals }
+    // Named scales carry their own degrees; custom ones get the conventional spelling.
+    val named = overlay.scale?.let { (f, s) -> Scales.families[f].scales[s].intervals } ?: spell(overlay.intervals)
     return state.stringRange.flatMap { s -> frets.map { f -> Position(s, f) } }.mapNotNull { p ->
         val pc = tuning.pitchClassAt(p.string, p.fret)
         val semis = degree[pc] ?: return@mapNotNull null
-        val iv = named?.firstOrNull { it.semitones % 12 == semis } ?: Interval(semis, 1)
+        val iv = named.firstOrNull { it.semitones % 12 == semis } ?: Interval(semis, 1)
         val label = if (state.labelMode == LabelMode.Notes) (overlay.root + iv).name else iv.label
         val strong = (overlay.highlightRoots && semis == 0) || pc in chordTones
         Dot(p, NoteMark(label, degreeColor(iv)), faded = !alone, emphasis = strong)
@@ -159,7 +163,9 @@ fun SongBars(state: UiState, onSelect: (Int) -> Unit) {
                     section.bars.forEachIndexed { i, bar ->
                         val bi = start + i
                         FilterChip(
-                            selected = state.songBar == bi,
+                            // Repeats light up the same chip on every pass.
+                            selected = state.songBar >= start && state.songBar < start + section.bars.size * section.repeat &&
+                                (state.songBar - start) % section.bars.size == i,
                             onClick = { onSelect(bi) },
                             label = { Text(bar.joinToString("  ").ifEmpty { "—" }) },
                         )
@@ -200,7 +206,7 @@ fun musicForSong(state: UiState, dots: List<Dot>): Music {
     when (song) {
         is Progression -> song.flatBars.forEachIndexed { b, (_, chords) ->
             chords.forEachIndexed { i, symbol ->
-                val v = song.voicingFor(symbol, tuning, state.fretCount)
+                val v = song.voicingFor(symbol, state.baseTuning, state.fretCount)
                 if (v != null) boxes.putIfAbsent(symbol, v)
                 events += SheetEvent(v?.positions()?.toList().orEmpty(), whole = true, label = symbol, barAfter = i == chords.lastIndex, group = b)
             }
@@ -271,7 +277,7 @@ fun midiFor(state: UiState, sequence: List<Position>, shapes: List<Voicing>): By
                     if (section !== lastSection) { markers += barStart to section.name; lastSection = section }
                     val share = ts.quarters / chords.size.coerceAtLeast(1)
                     chords.forEachIndexed { i, symbol ->
-                        val v = song.voicingFor(symbol, t, state.fretCount) ?: return@forEachIndexed
+                        val v = song.voicingFor(symbol, state.baseTuning, state.fretCount) ?: return@forEachIndexed
                         var beat = 0.0
                         while (beat < share - 1e-6) {
                             notes += strum(v, barStart + i * share + beat, minOf(ts.pulse, share - beat))

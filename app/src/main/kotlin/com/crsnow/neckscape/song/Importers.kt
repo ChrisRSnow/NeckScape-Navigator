@@ -112,7 +112,8 @@ object ChordProImporter {
                 continue
             }
             if (inTab || line.trimStart().startsWith("#")) continue
-            if (Importers.SECTION_WORDS.matches(line) && CHORD.find(line) == null) {
+            // A line that's just a part name ("Chorus", "[Verse 2]") starts a section, even in brackets.
+            if (Importers.SECTION_WORDS.matches(line)) {
                 flush()
                 name = line.trim().trim('[', ']', ':').trim()
                 continue
@@ -208,55 +209,45 @@ object AsciiTabImporter {
         val rows = bodies.map { it.padEnd(width, '-') }
         val measures = ArrayList<Measure>()
         var events = ArrayList<TabEvent>()
-        var c = 0
-        // Pending slide/hammer marks carry to the next note on that string.
+        // Pending hammer/pull marks carry to the next note on that string.
         val pending = HashMap<Int, String>()
-        while (c < width) {
+        // Columns already read on each string (a bend or slide target belongs to the note before it).
+        val readTo = IntArray(rows.size)
+        for (c in 0 until width) {
             if (rows.all { it[c] == '|' || it[c] == ':' }) {
                 if (events.isNotEmpty()) measures += Measure(events)
                 events = ArrayList()
-                c++
                 continue
             }
             val notes = ArrayList<TabNote>()
-            var advance = 1
             rows.forEachIndexed { r, row ->
-                val ch = row[c]
-                val string = r + 1
-                when {
-                    ch.isDigit() && (c == 0 || !row[c - 1].isDigit()) -> {
-                        var end = c
-                        while (end < width && row[end].isDigit() && end - c < 2) end++
-                        val fret = row.substring(c, end).toInt()
-                        var technique: Technique? = when (pending.remove(r)) {
-                            "h" -> Technique("hammer_on")
-                            "p" -> Technique("pull_off")
-                            else -> null
-                        }
-                        val next = row.getOrNull(end)
-                        if (next == 'b') {
-                            val target = Regex("""^\d{1,2}""").find(row.substring(end + 1))?.value?.toIntOrNull()
-                            technique = Technique("bend", semitones = ((target ?: (fret + 2)) - fret).toDouble().coerceAtLeast(0.5))
-                            advance = maxOf(advance, end - c + 1 + (target?.toString()?.length ?: 0))
-                        } else if (next == '/' || next == '\\') {
-                            val target = Regex("""^\d{1,2}""").find(row.substring(end + 1))?.value?.toIntOrNull()
-                            if (target != null) {
-                                technique = Technique("slide_to", fret = target)
-                                advance = maxOf(advance, end - c + 1 + target.toString().length)
-                            }
-                        } else if (next == '~') {
-                            technique = technique ?: Technique("vibrato")
-                        } else if (next == 'h' || next == 'p') {
-                            pending[r] = next.toString()
-                        }
-                        if (row.getOrNull(c - 1) == '<') technique = Technique("harmonic")
-                        notes += TabNote(string, fret, technique)
-                        advance = maxOf(advance, end - c)
-                    }
+                if (c < readTo[r] || !row[c].isDigit()) return@forEachIndexed
+                var end = c
+                while (end < width && row[end].isDigit() && end - c < 2) end++
+                readTo[r] = end
+                val fret = row.substring(c, end).toInt()
+                var technique: Technique? = when (pending.remove(r)) {
+                    "h" -> Technique("hammer_on")
+                    "p" -> Technique("pull_off")
+                    else -> null
                 }
+                when (row.getOrNull(end)) {
+                    'b' -> {
+                        val target = Regex("""^\d{1,2}""").find(row.substring(end + 1))?.value
+                        technique = Technique("bend", semitones = (((target?.toInt()) ?: (fret + 2)) - fret).toDouble().coerceAtLeast(0.5))
+                        readTo[r] = end + 1 + (target?.length ?: 0)
+                    }
+                    '/', '\\' -> Regex("""^\d{1,2}""").find(row.substring(end + 1))?.value?.let { target ->
+                        technique = Technique("slide_to", fret = target.toInt())
+                        readTo[r] = end + 1 + target.length
+                    }
+                    '~' -> technique = technique ?: Technique("vibrato")
+                    'h', 'p' -> pending[r] = row[end].toString()
+                }
+                if (row.getOrNull(c - 1) == '<') technique = Technique("harmonic")
+                notes += TabNote(r + 1, fret, technique)
             }
             if (notes.isNotEmpty()) events += TabEvent(events.size.toDouble(), null, notes)
-            c += advance
         }
         if (events.isNotEmpty()) measures += Measure(events)
         return measures

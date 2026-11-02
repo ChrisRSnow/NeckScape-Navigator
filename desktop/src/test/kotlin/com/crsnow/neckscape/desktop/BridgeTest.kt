@@ -146,4 +146,40 @@ class BridgeTest {
         vm.follow(listOf(setOf(p)), step = 5.0)
         assertEquals(false, vm.playback.value.playing)
     }
+
+    @Test fun `an interrupted play run doesn't leave the button on Stop`() {
+        val p = com.crsnow.neckscape.theory.Position(0, 3)
+        vm.follow(listOf(setOf(p), setOf(p)), step = 5.0, playing = true)
+        vm.follow(listOf(setOf(p)), step = 0.01) // a tapped note cuts it short
+        repeat(50) { if (!vm.playback.value.playing) return@repeat; Thread.sleep(20) }
+        assertEquals(false, vm.playback.value.playing)
+    }
+
+    @Test fun `undo takes back the push but keeps settings changed since`() {
+        val payload = Json.parse(File(fixtures, "good-house-of-the-rising-sun.json").readText())
+        tool("load_progression", mapOf("progression" to payload))
+        vm.setTempo(90)
+        vm.setInstrument(com.crsnow.neckscape.theory.Instrument.Piano)
+        tool("undo")
+        assertEquals(ViewMode.Scale, vm.state.value.viewMode)
+        assertEquals(90, vm.state.value.tempo)
+        assertEquals(com.crsnow.neckscape.theory.Instrument.Piano, vm.state.value.instrument)
+    }
+
+    @Test fun `an AI scale's frets win over a picked CAGED shape`() {
+        vm.setLevel(com.crsnow.neckscape.theory.Level.Intermediate)
+        vm.setCaged(2)
+        tool("show_scale", mapOf("scale" to "minor_pentatonic", "root" to "A", "fret_range" to listOf(5, 8)))
+        assertEquals(5..8, vm.state.value.fretRange)
+    }
+
+    @Test fun `with a capo, chord symbols are shapes relative to it`() {
+        tool("load_progression", mapOf("progression" to mapOf(
+            "schema_version" to "1.0", "type" to "progression", "title" to "Capo", "capo" to 2,
+            "chords" to mapOf("C" to mapOf("frets" to listOf(null, 3, 2, 0, 1, 0))),
+            "sections" to listOf(mapOf("bars" to listOf(listOf("C")))),
+        )))
+        val labels = com.crsnow.neckscape.ui.songDots(vm.state.value).first.map { it.mark.label }.toSet()
+        assertEquals(setOf("C", "E", "G"), labels)
+    }
 }

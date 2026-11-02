@@ -194,20 +194,38 @@ class NeckScapeViewModel : ViewModel() {
     /** Positions sounding right now; the fretboard rings them. */
     val sounding: StateFlow<Set<Position>> = _sounding.asStateFlow()
     private var followJob: Job? = null
+    private var followRuns = 0
+    /** The follow run that owns the "playing" state, so an interrupted run still clears it. */
+    private var playingRun = 0
 
     /** Rings each group in turn, [step] seconds apart, then clears after [hold] — in time with the audio. */
     fun follow(groups: List<Set<Position>>, step: Double, hold: Double = 0.5, playing: Boolean = false) {
         followJob?.cancel()
+        val run = ++followRuns
         // Play-button playback shows as playing (so the button can stop it); a tapped note doesn't.
-        if (playing) _playback.value = Playback(playing = true)
+        if (playing) {
+            playingRun = run
+            _playback.value = Playback(playing = true)
+        } else if (playingRun != 0) {
+            // A tap cuts the run short; a run cancelled before it started wouldn't reach its finally.
+            playingRun = 0
+            _playback.value = Playback()
+        }
         followJob = viewModelScope.launch {
-            for (group in groups) {
-                _sounding.value = group
-                delay((step * 1000).toLong())
+            try {
+                for (group in groups) {
+                    _sounding.value = group
+                    delay((step * 1000).toLong())
+                }
+                delay((hold * 1000).toLong())
+                _sounding.value = emptySet()
+            } finally {
+                // Finished or cut short (a tap, Stop): unless a newer run took over, playing is over.
+                if (playingRun == run) {
+                    playingRun = 0
+                    _playback.value = Playback()
+                }
             }
-            delay((hold * 1000).toLong())
-            _sounding.value = emptySet()
-            if (playing) _playback.value = Playback()
         }
     }
 
@@ -366,14 +384,22 @@ class NeckScapeViewModel : ViewModel() {
         edit { block().copy(undoDepth = undo.size) }
     }
 
-    /** Takes back the last pushed change. */
+    /**
+     * Takes back the last pushed change: what's showing goes back, but settings
+     * the user changed since (sound, tempo, labels, display…) stay as they are.
+     */
     fun undo() = synchronized(undo) {
         val previous = undo.removeLastOrNull() ?: return@synchronized
         stopPlayback()
-        _state.value = previous.copy(undoDepth = undo.size)
+        val now = _state.value
+        _state.value = previous.copy(
+            undoDepth = undo.size,
+            labelMode = now.labelMode, showOrder = now.showOrder, tempo = now.tempo, instrument = now.instrument,
+            leftHanded = now.leftHanded, fretCount = now.fretCount, display = now.display,
+        )
     }
 
-    private fun UiState.fullNeck() = copy(fretFrom = 0, fretTo = TO_END, stringFrom = 0, stringTo = TO_END)
+    private fun UiState.fullNeck() = copy(fretFrom = 0, fretTo = TO_END, stringFrom = 0, stringTo = TO_END, cagedPick = -1)
 
     /** Uses [t] as the tuning: a preset if one matches, else a custom tuning. */
     private fun UiState.tunedTo(t: Tuning): UiState {
@@ -469,7 +495,7 @@ class NeckScapeViewModel : ViewModel() {
     fun playSong(loop: Boolean, section: String?, tempoPct: Double): String {
         val s = _state.value
         val song = s.song ?: throw BridgeError("NOT_FOUND", "Nothing to play — load a progression or tab first")
-        val plan = schedule(song, s.tuning, s.fretCount, section, tempoPct)
+        val plan = schedule(song, s.tuning, s.fretCount, section, tempoPct, shapes = s.baseTuning)
         stopPlayback()
         _playback.value = Playback(playing = true, looping = loop, section = section)
         playJob = viewModelScope.launch {

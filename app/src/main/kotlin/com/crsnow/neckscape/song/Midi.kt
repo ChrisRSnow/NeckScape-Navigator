@@ -168,14 +168,16 @@ object Midi {
         val fingering = Fingering(guitar)
         val markers = tracks.flatMap { it.markers }.associate { (tick, text) -> (tick / measureTicks).toInt() to text }
         val notes = chosen.notes.filter { it.channel != 9 }
-        val lastMeasure = ((notes.maxOf { it.start }) / measureTicks).toInt()
+        // Quantise first, then find the bar: a note a hair before a barline rounds onto it, into the next bar.
+        fun barOf(n: RNote) = (q(n.start) / ts.quarters + 1e-9).toInt()
+        val lastMeasure = notes.maxOf(::barOf)
         var dropped = 0
         val measures = (0..lastMeasure).map { m ->
-            val inBar = notes.filter { it.start / measureTicks == m.toLong() }.groupBy { q(it.start - m * measureTicks) }
+            val inBar = notes.filter { barOf(it) == m }.groupBy { q(it.start) - m * ts.quarters }
             val events = inBar.entries.sortedBy { it.key }.map { (at, group) ->
                 val placed = fingering.place(group.map { it.midi })
                 dropped += group.map { it.midi }.distinct().size - placed.size
-                val len = q(group.maxOf { it.end - it.start }).coerceIn(1.0 / 12, ts.quarters - at)
+                val len = maxOf(1.0 / 12, minOf(q(group.maxOf { it.end - it.start }), ts.quarters - at))
                 TabEvent(at, len, placed)
             }
             Measure(events, markers[m])

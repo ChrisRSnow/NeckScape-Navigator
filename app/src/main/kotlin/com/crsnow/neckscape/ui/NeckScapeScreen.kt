@@ -404,6 +404,8 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                 },
                 outlined = if (voicing == null) cagedShape?.frets?.withIndex()?.mapNotNull { (str, f) -> f?.let { Position(str, it) } }?.toSet().orEmpty() else emptySet(),
                 onTap = { p ->
+                    // A tapped note cuts off whatever was playing, so stop its ringing too.
+                    if (playback.playing) vm.stopPlayback()
                     player?.playNote(state.tuning.midi[p.string] + p.fret)
                     vm.follow(listOf(setOf(p)), step = 0.6)
                 },
@@ -431,7 +433,7 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                 ViewMode.Song -> SongBars(state) { i ->
                     vm.selectBar(i)
                     val s = vm.state.value
-                    (s.song as? Progression)?.let { p -> s.songChord?.let { p.voicingFor(it, s.tuning, s.fretCount) } }?.let(::strum)
+                    (s.song as? Progression)?.let { p -> s.songChord?.let { p.voicingFor(it, s.baseTuning, s.fretCount) } }?.let(::strum)
                 }
             }
         }

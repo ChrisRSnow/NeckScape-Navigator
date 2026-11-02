@@ -22,13 +22,18 @@ fun configDir(): File {
     return dir
 }
 
-/** Writes [text] readable by this user only (where the file system supports it). */
+/**
+ * Writes [text] readable by this user only (where the file system supports it):
+ * the file is created private before anything is written, then renamed into place.
+ */
 private fun writePrivate(file: File, text: String) {
     file.parentFile.mkdirs()
-    val tmp = File(file.parentFile, file.name + ".tmp")
-    tmp.writeText(text)
-    runCatching { Files.setPosixFilePermissions(tmp.toPath(), PosixFilePermissions.fromString("rw-------")) }
-    if (!tmp.renameTo(file)) { file.delete(); tmp.renameTo(file) }
+    val tmp = File(file.parentFile, file.name + ".tmp").toPath()
+    Files.deleteIfExists(tmp)
+    runCatching { Files.createFile(tmp, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))) }
+        .onFailure { Files.createFile(tmp) } // Windows: per-user folders are private already
+    Files.writeString(tmp, text)
+    Files.move(tmp, file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
 }
 
 /** Bridge settings (token) in a properties file. */
@@ -53,9 +58,10 @@ object Discovery {
 
     @Synchronized
     fun publish(status: BridgeStatus) {
-        withdraw()
-        if (!status.running) return
         val file = File(configDir(), "instances/${status.port}.json")
+        // Replaced in place (never deleted first), so the MCP server can't catch it missing.
+        if (!status.running || current != file) withdraw()
+        if (!status.running) return
         writePrivate(
             file,
             Json.write(

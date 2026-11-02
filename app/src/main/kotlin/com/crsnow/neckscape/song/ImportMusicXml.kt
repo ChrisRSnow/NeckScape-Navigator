@@ -167,6 +167,9 @@ object MusicXmlImporter {
                 "forward" -> cursor += (e.text("duration")?.toDoubleOrNull() ?: 0.0)
                 "note" -> {
                     if (e.kid("grace") != null || e.kid("cue") != null) continue
+                    // The second half of a tie keeps the note ringing; it isn't plucked again.
+                    val tieStop = e.kids("tie").any { it.getAttribute("type") == "stop" } &&
+                        e.kids("tie").none { it.getAttribute("type") == "start" }
                     val dur = (e.text("duration")?.toDoubleOrNull() ?: 0.0)
                     val isChord = e.kid("chord") != null
                     val start = if (isChord) lastStart else cursor
@@ -174,7 +177,7 @@ object MusicXmlImporter {
                     lastStart = start
                     val at = start / divisions
                     val q = dur / divisions
-                    if (e.kid("rest") != null) {
+                    if (e.kid("rest") != null || tieStop) {
                         if (!isChord) byTime.getOrPut(at) { q to ArrayList() }
                         continue
                     }

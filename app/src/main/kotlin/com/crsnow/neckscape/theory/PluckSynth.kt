@@ -201,7 +201,8 @@ object PluckSynth {
                 var rise = 1.0
                 for (i in 0 until samples) {
                     val pos = start + i
-                    if (pos >= mix.size) break
+                    // Stop once the partial has died away (high ones go quickly): most of the work saved.
+                    if (pos >= mix.size || (i > 4_410 && eFast + eSlow < 1e-4 * level)) break
                     val s0 = k * s1 - s2
                     s2 = s1
                     s1 = s0

@@ -18,7 +18,11 @@ fun TabNote.position(tuning: Tuning): Position? =
 private data class VoicingKey(val tuning: Tuning, val symbol: String, val style: String, val frets: Int)
 private val voicingCache = ConcurrentHashMap<VoicingKey, Voicing>()
 
-/** The shape for [symbol]: from the progression's chord table, else picked in its voicing style. */
+/**
+ * The shape for [symbol]: from the progression's chord table, else picked in
+ * its voicing style. With a capo, chord symbols name shapes relative to the
+ * capo (as songbooks write them), so [tuning] is the strings without it.
+ */
 fun Progression.voicingFor(symbol: String, tuning: Tuning, fretCount: Int): Voicing? {
     chords[symbol]?.let { return Voicing(it) }
     if (symbol.uppercase() in SchemaReader.NO_CHORD) return null
@@ -62,7 +66,7 @@ fun Song.barsOf(section: String?): IntRange? {
  * Notes and ring positions to play [song] (or one [section]) at its tempo
  * scaled by [tempoPct]. Chords strum on every beat of their share of the bar.
  */
-fun schedule(song: Song, tuning: Tuning, fretCount: Int, section: String?, tempoPct: Double): Schedule {
+fun schedule(song: Song, tuning: Tuning, fretCount: Int, section: String?, tempoPct: Double, shapes: Tuning = tuning): Schedule {
     val bars = song.barsOf(section) ?: throw BridgeError("NOT_FOUND", "No section or marker named '$section'")
     val ts = song.timeSignature
     val bpm = (song.tempoBpm ?: if (song is Tab) 100.0 else 90.0) * tempoPct / 100.0
@@ -78,7 +82,7 @@ fun schedule(song: Song, tuning: Tuning, fretCount: Int, section: String?, tempo
                 val chords = flat[b].second
                 val share = ts.quarters / chords.size.coerceAtLeast(1)
                 chords.forEachIndexed { i, symbol ->
-                    val v = song.voicingFor(symbol, tuning, fretCount)
+                    val v = song.voicingFor(symbol, shapes, fretCount)
                     val start = t + i * share * secPerQuarter
                     var beat = 0.0
                     while (beat < share - 1e-6) {

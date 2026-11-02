@@ -6,6 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
@@ -39,7 +40,10 @@ fun main() = application {
         val tools = AiTools(viewModel, platformName())
         BridgeServer(FileSettings(configDir().resolve("settings.properties")), lanCapable = false, handler = tools::call).also { it.start() }
     }
-    LaunchedEffect(bridge) { bridge.status.collect { Discovery.publish(it) } }
+    // Only port/token/running changes matter to the discovery file, not every request.
+    LaunchedEffect(bridge) {
+        bridge.status.distinctUntilChangedBy { Triple(it.running, it.port, it.token) }.collect { Discovery.publish(it) }
+    }
     Window(
         onCloseRequest = {
             bridge.stop()
