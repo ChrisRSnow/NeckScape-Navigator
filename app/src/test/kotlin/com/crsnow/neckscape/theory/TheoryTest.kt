@@ -238,7 +238,16 @@ class TheoryTest {
             val best = (120..260).maxBy { lag -> (0 until x.size - lag).sumOf { x[it] * x[it + lag] } }
             assertEquals("${instrument.name} pitch", 44_100.0 / 220, best.toDouble(), 2.5)
         }
-        // Acoustic is unchanged from 1.0: the same pluck as before.
-        assertEquals(PluckSynth.render(a, 1.0).toList(), PluckSynth.render(a, 1.0, Instrument.Acoustic).toList())
+        // Guitar notes ease in rather than starting on a full-scale click.
+        for (instrument in listOf(Instrument.Acoustic, Instrument.Classical, Instrument.Electric)) {
+            val pcm = PluckSynth.render(a, 1.0, instrument)
+            val first = pcm.take(10).maxOf { kotlin.math.abs(it.toInt()) }
+            val body = pcm.take(4_410).maxOf { kotlin.math.abs(it.toInt()) }
+            assertTrue("${instrument.name} attack", first < body / 4)
+        }
+        // Classical chords are finger-picked: thumb on the bass, fingers together just after.
+        val chord = PluckSynth.strum(listOf(45, 52, 57, 60))
+        val classical = PluckSynth.render(chord, 1.0, Instrument.Classical)
+        assertTrue(classical.size > PluckSynth.SAMPLE_RATE)
     }
 }

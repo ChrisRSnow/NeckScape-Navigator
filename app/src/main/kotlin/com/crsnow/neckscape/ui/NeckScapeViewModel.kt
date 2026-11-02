@@ -66,6 +66,9 @@ enum class LabelMode { Notes, Intervals }
 const val MIN_TEMPO = 40
 const val MAX_TEMPO = 240
 
+/** Frets shown at Beginner level, so the neck isn't overwhelming: open strings to the 4th fret. */
+const val BEGINNER_FRETS = 4
+
 /** Stored range end meaning "as far as the neck goes", so it survives fret/string count changes. */
 private const val TO_END = Int.MAX_VALUE
 
@@ -83,7 +86,8 @@ data class UiState(
     val customTuning: Tuning? = null,
     val fretCount: Int = 22,
     val fretFrom: Int = 0,
-    val fretTo: Int = TO_END,
+    /** Beginner (where every launch starts) shows the first position: open strings to fret 4. */
+    val fretTo: Int = BEGINNER_FRETS,
     val stringFrom: Int = 0,
     val stringTo: Int = TO_END,
     val labelMode: LabelMode = LabelMode.Notes,
@@ -277,7 +281,19 @@ class NeckScapeViewModel : ViewModel() {
         if (n == 0) this else copy(cagedPick = Math.floorMod((if (cagedPick < 0) -1 else cagedPick) + delta, n))
     }
 
-    fun setLevel(level: Level) = edit { copy(level = level).fitLevel().respelled() }
+    /**
+     * Beginner narrows the neck to the first position; leaving it opens the whole
+     * neck again, unless the frets were moved from that starting range.
+     */
+    fun setLevel(level: Level) = edit {
+        val firstPosition = fretFrom == 0 && fretTo == BEGINNER_FRETS
+        val frets = when {
+            level == Level.Beginner -> copy(fretFrom = 0, fretTo = BEGINNER_FRETS, cagedPick = -1)
+            this.level == Level.Beginner && firstPosition -> copy(fretFrom = 0, fretTo = TO_END)
+            else -> this
+        }
+        frets.copy(level = level).fitLevel().respelled()
+    }
 
     fun selectRoot(pitchClass: Int) = edit { copy(root = Note.bestSpelling(pitchClass, intervals)) }
 

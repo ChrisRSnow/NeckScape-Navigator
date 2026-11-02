@@ -45,12 +45,17 @@ object PluckSynth {
         val mix = FloatArray(length)
         val random = Random(42) // same pluck every time
         val samples = (tail * SAMPLE_RATE).roundToInt()
-        for (event in events) {
+        val notes = if (instrument == Instrument.Classical) fingerPicked(events) else events.map { it to 1f }
+        for ((event, velocity) in notes) {
             val start = (event.at * SAMPLE_RATE).roundToInt()
             when (instrument) {
-                Instrument.Acoustic -> pluck(mix, start, samples, event.midi, random, smooth = 0, damp = 0.996, brightness = 0.5f)
-                Instrument.Classical -> pluck(mix, start, samples, event.midi, random, smooth = 10, damp = 0.992, brightness = 0.5f, body = 0.22f)
-                Instrument.Electric -> pluck(mix, start, samples, event.midi, random, smooth = 0, damp = 0.9984, brightness = 0.5f, gain = 0.9f)
+                // Guitars: the pick (or finger) position and a few-ms onset keep the attack from clicking.
+                Instrument.Acoustic -> pluck(mix, start, samples, event.midi, random, smooth = 2, damp = 0.996, brightness = 0.5f,
+                    pluckAt = 0.18, attackMs = 4.0)
+                Instrument.Classical -> pluck(mix, start, samples, event.midi, random, smooth = 12, damp = 0.992, brightness = 0.5f,
+                    body = 0.22f, pluckAt = 0.27, attackMs = 11.0, gain = velocity)
+                Instrument.Electric -> pluck(mix, start, samples, event.midi, random, smooth = 2, damp = 0.9984, brightness = 0.5f,
+                    gain = 0.9f, pluckAt = 0.15, attackMs = 3.0)
                 Instrument.Piano -> piano(mix, start, samples, event.midi)
                 Instrument.Synth -> synth(mix, start, samples, event.midi)
             }
@@ -67,17 +72,52 @@ object PluckSynth {
     private fun fade(i: Int, samples: Int) = ((samples - i) / (0.05f * SAMPLE_RATE)).coerceAtMost(1f)
 
     /**
+     * Classical guitar is finger-picked: a chord (notes within a strum of each
+     * other) becomes the thumb on the bass, then the fingers together a moment
+     * later, a touch softer — not a pick sweeping across.
+     */
+    private fun fingerPicked(events: List<NoteEvent>): List<Pair<NoteEvent, Float>> {
+        val out = ArrayList<Pair<NoteEvent, Float>>()
+        val sorted = events.sortedBy { it.at }
+        var i = 0
+        while (i < sorted.size) {
+            var j = i + 1
+            while (j < sorted.size && sorted[j].at - sorted[j - 1].at <= 0.06) j++
+            val chord = sorted.subList(i, j)
+            if (chord.size == 1) {
+                out += chord[0] to 1f
+            } else {
+                val start = chord.first().at
+                val bass = chord.minBy { it.midi }
+                out += bass.copy(at = start) to 1f
+                chord.filter { it !== bass }.sortedBy { it.midi }.forEachIndexed { k, n ->
+                    out += n.copy(at = start + 0.085 + k * 0.012) to 0.8f
+                }
+            }
+            i = j
+        }
+        return out
+    }
+
+    /**
      * Karplus–Strong. [smooth] passes of averaging soften the pluck (a fingertip
-     * rather than a pick); [damp] sets how long it rings; [brightness] weights
-     * the loop filter (0.5 = the classic two-point average); [body] < 1 adds a
-     * one-pole low-pass on the way out, for a darker, woodier tone.
+     * rather than a pick); [pluckAt] is where along the string it's plucked
+     * (nearer the bridge is brighter), which notches out harsh overtones;
+     * [attackMs] eases the note in; [damp] sets how long it rings;
+     * [brightness] weights the loop filter (0.5 = the classic two-point
+     * average); [body] < 1 adds a one-pole low-pass on the way out, for a
+     * darker, woodier tone.
      */
     private fun pluck(
         mix: FloatArray, start: Int, samples: Int, midi: Int, random: Random,
         smooth: Int, damp: Double, brightness: Float, gain: Float = 1f, body: Float = 1f,
+        pluckAt: Double = 0.0, attackMs: Double = 0.0,
     ) {
         val period = (SAMPLE_RATE / freq(midi)).roundToInt().coerceAtLeast(2)
-        val line = FloatArray(period) { random.nextFloat() - 0.5f }
+        val noise = FloatArray(period) { random.nextFloat() - 0.5f }
+        // Plucking a fraction β along the string cancels the harmonics with a node there.
+        val offset = (pluckAt * period).roundToInt()
+        val line = if (offset > 0) FloatArray(period) { k -> noise[k] - noise[(k + period - offset) % period] } else noise
         repeat(smooth) {
             val copy = line.copyOf()
             for (k in line.indices) line[k] = (copy[(k + period - 1) % period] + 2 * copy[k] + copy[(k + 1) % period]) / 4f
@@ -86,6 +126,7 @@ object PluckSynth {
         val damping = (damp + (1 - damp) * 0.75 * (1 - period / 1000.0).coerceIn(0.0, 1.0)).toFloat()
         var idx = 0
         var lp = 0f
+        val attack = (attackMs / 1000 * SAMPLE_RATE).coerceAtLeast(1.0)
         for (i in 0 until samples) {
             val pos = start + i
             if (pos >= mix.size) break
@@ -93,7 +134,9 @@ object PluckSynth {
             lp += body * (line[idx] - lp)
             val out = if (body < 1f) lp else line[idx]
             line[idx] = damping * (brightness * line[next] + (1 - brightness) * line[idx])
-            mix[pos] += out * fade(i, samples) * gain
+            // Raised-cosine onset: the string speaks without a click.
+            val onset = if (i < attack) (0.5 - 0.5 * kotlin.math.cos(PI * i / attack)).toFloat() else 1f
+            mix[pos] += out * fade(i, samples) * gain * onset
             idx = next
         }
     }
