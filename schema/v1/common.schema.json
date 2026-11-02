@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/neckscape-navigator/schema/v1/common.schema.json",
+  "title": "NeckScape schema v1: shared definitions",
+  "$defs": {
+    "version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "note": { "type": "string", "pattern": "^[A-Ga-g](#|b|♯|♭){0,2}$" },
+    "pitch": { "type": "string", "pattern": "^[A-Ga-g](#|b|♯|♭){0,2}-?[0-9]$", "description": "Note with octave, e.g. E2, F#3" },
+    "source": { "enum": ["ai_generated", "user_file", "user_typed", "online"] },
+    "tuning": {
+      "type": "object",
+      "required": ["strings"],
+      "properties": {
+        "name": { "type": "string" },
+        "strings": { "type": "array", "items": { "$ref": "#/$defs/pitch" }, "minItems": 1, "maxItems": 12, "description": "Lowest string first" }
+      }
+    },
+    "capo": { "type": "integer", "minimum": 0, "maximum": 12 },
+    "time_signature": { "type": "string", "pattern": "^[0-9]{1,2}/(1|2|4|8|16|32)$" },
+    "tempo_bpm": { "type": "number", "minimum": 20, "maximum": 400, "description": "Beats you'd tap: quarters in 4/4, dotted quarters in 6/8" },
+    "online_fields": {
+      "properties": {
+        "source_url": { "type": "string" },
+        "author": { "type": "string" },
+        "rating": { "type": "number" }
+      }
+    }
+  }
+}

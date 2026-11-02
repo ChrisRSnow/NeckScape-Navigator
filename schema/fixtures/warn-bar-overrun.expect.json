@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "warnings": [
+    "BAR_LENGTH@measures[0]"
+  ],
+  "schema_valid": true
+}

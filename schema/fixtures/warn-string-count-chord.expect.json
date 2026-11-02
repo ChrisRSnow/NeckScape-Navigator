@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "warnings": [
+    "STRING_COUNT@chords.Am"
+  ],
+  "schema_valid": true
+}

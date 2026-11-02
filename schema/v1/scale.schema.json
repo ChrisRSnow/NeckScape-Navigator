@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/neckscape-navigator/schema/v1/scale.schema.json",
+  "title": "NeckScape scale overlay (schema v1)",
+  "type": "object",
+  "required": ["schema_version", "type", "root"],
+  "anyOf": [{ "required": ["scale"] }, { "required": ["intervals"] }],
+  "properties": {
+    "schema_version": { "$ref": "common.schema.json#/$defs/version" },
+    "type": { "const": "scale" },
+    "root": { "$ref": "common.schema.json#/$defs/note" },
+    "scale": { "type": "string", "description": "A name from get_app_info.scales, e.g. minor_pentatonic" },
+    "intervals": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 11 } },
+    "fret_range": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 36 }, "minItems": 2, "maxItems": 2 },
+    "highlight": {
+      "type": "object",
+      "properties": { "roots": { "type": "boolean" }, "chord_tones_of": { "type": "string" } }
+    }
+  }
+}

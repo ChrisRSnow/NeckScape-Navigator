@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "error": "UNSUPPORTED_VERSION",
+  "path": "schema_version",
+  "schema_valid": false
+}

@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "warnings": [
+    "STRING_COUNT@measures[0].events[0].notes[0].string"
+  ],
+  "schema_valid": true
+}

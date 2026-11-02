@@ -1,0 +1,36 @@
+# Voice-over for the feature video: id|text. Each id is spoken where FeatureVideo
+# calls narrate("id"); scenes wait for it to finish. Write for the ear: spell out
+# symbols ("seven sharp nine", "chord two") and avoid abbreviations.
+intro|This is Neck Scape Navigator: a quick tour of scales, modes and chords on the guitar fretboard, made with teachers in mind.
+level_beginner|First, pick a level. Beginner keeps it simple: major and minor scales, chords and arpeggios, and nothing else to get lost in.
+level_more|Intermediate adds extended chords and the modes, and Advanced opens up everything else.
+whole|Here's C major, on every string and every fret. The colours follow the scale degree. The root is red, the third is orange, and the fifth is blue. So a shape looks the same in every key.
+intervals|One tap swaps the note names for intervals, so students see what each note does in the scale, not just what it's called.
+dorian|Now C Dorian. Same root, new colours. The flat third and the flat seventh stand out straight away.
+lydian|And C Lydian, where the sharp fourth is the one note that changes. There are over a hundred scales, including every mode of the major, melodic minor and harmonic minor scales.
+position|The fret slider narrows the neck to a single position. Here's A minor pentatonic, between the fifth and eighth frets. The small numbers give the order to play it in.
+hear|Press play, and the scale runs up and back down. The ring shows which note is sounding. It's good for ear training, and for checking fingering.
+tempo_slow|The tempo slider sets the playback speed. Take it slowly at first, while the fingering is worked out.
+tempo_drag|Then drag it up, as it gets under the fingers.
+tempo_fast|Here it is at two hundred beats per minute.
+arpeggio|Arpeggios work the same way. Here's A minor, in the same position, numbered and played up and back down.
+score|Any of these can be shown as standard notation. The note that's sounding lights up as it plays.
+tab|Or as tab, with the fret for every note.
+strings|The string slider narrows the view too. Here it's just the top three strings, which is handy for triad shapes.
+key|Every seven note scale is harmonised for you, with Roman numerals.
+sevenths|Switch on sevenths, and you get the seventh chords of the key.
+tapchord|Tap chord two, and you get D minor seven, with every chord tone shown on the neck.
+shapes|Then step through playable shapes, found for the current tuning, and hear each one strummed.
+hendrix|There are a hundred and six chord types, from simple triads to altered dominants. This is E seven sharp nine: the Hendrix chord.
+linked_cm7|Scales and chords stay linked. Choose C minor seven,
+linked_scale|switch to the scale view, and you get a scale that fits it: C Aeolian, the natural minor.
+dadgad|Any tuning works. Here's D major, in dad gad tuning.
+ukulele|And on ukulele. There are presets for drop D, open G, seven string guitar and bass, or you can retune any string yourself.
+pdf|And any view can be saved as a PDF, ready to print as a handout. The fretboard, the score, the tab, or all three on one page.
+ai_intro|Neck Scape Navigator also works with AI assistants, like Claude Code. Ask for the chords to House of the Rising Sun, and they appear on the neck.
+ai_check|The app checks everything it's sent. Here the F chord had the wrong frets, so the app said what they really played, and the assistant fixed it. Anything from an AI is labelled: check by ear.
+ai_overlay|Ask for A minor pentatonic over it, and the scale sits behind the chords, with the roots picked out.
+ai_tab|For a melody or a solo, the assistant looks in your own tab library. Here's the refrain of Greensleeves, opened at the right bar.
+ai_honest|If a tab isn't there, it says so, and offers the key, scale shapes and some original licks instead, rather than guessing a recorded solo from memory.
+files|You can open Guitar Pro, Music X M L, MIDI, ChordPro and text tabs yourself, and save any view as a PDF, or as MIDI, to take into your own software.
+outro|Neck Scape Navigator runs on Android phones and tablets, on Windows, on the Mac, and on Linux, and it works with your AI assistant. Thanks for watching.

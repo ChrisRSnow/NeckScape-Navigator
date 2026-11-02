@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "error": "INVALID_SCHEMA",
+  "path": "measures[0].events[0].notes[0].technique.type",
+  "schema_valid": false
+}

@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "type": "tab",
+  "source": "user_typed",
+  "title": "Root-fifth bass",
+  "tuning": {
+    "name": "Bass",
+    "strings": [
+      "E1",
+      "A1",
+      "D2",
+      "G2"
+    ]
+  },
+  "time_signature": "4/4",
+  "measures": [
+    {
+      "marker": "Verse",
+      "events": [
+        {
+          "at": 0,
+          "dur": 1,
+          "notes": [
+            {
+              "string": 3,
+              "fret": 3
+            }
+          ]
+        },
+        {
+          "at": 1,
+          "dur": 1,
+          "notes": []
+        },
+        {
+          "at": 2,
+          "dur": 1,
+          "notes": [
+            {
+              "string": 2,
+              "fret": 5
+            }
+          ]
+        },
+        {
+          "at": 3,
+          "dur": 1,
+          "notes": [
+            {
+              "string": 3,
+              "fret": 5
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

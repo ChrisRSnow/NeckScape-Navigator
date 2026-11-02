@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "type": "progression",
+  "title": "Descending bass",
+  "time_signature": "4/4",
+  "tempo_bpm": 80,
+  "capo": 2,
+  "voicing_style": "open",
+  "sections": [
+    {
+      "name": "Intro",
+      "repeat": 2,
+      "bars": [
+        [
+          "C",
+          "C/B"
+        ],
+        [
+          "Am7",
+          "Am7/G"
+        ],
+        [
+          "Fmaj7"
+        ],
+        [
+          "G7sus4",
+          "G7"
+        ]
+      ]
+    }
+  ]
+}

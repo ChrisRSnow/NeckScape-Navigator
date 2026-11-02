@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "type": "tab",
+  "source": "online",
+  "source_url": "https://tabs.example/solo",
+  "author": "someone",
+  "rating": 4.5,
+  "title": "Riff",
+  "tuning": {
+    "name": "Standard",
+    "strings": [
+      "E2",
+      "A2",
+      "D3",
+      "G3",
+      "B3",
+      "E4"
+    ]
+  },
+  "measures": [
+    {
+      "events": [
+        {
+          "at": 0,
+          "dur": null,
+          "notes": [
+            {
+              "string": 5,
+              "fret": 0
+            }
+          ]
+        },
+        {
+          "at": 1,
+          "dur": null,
+          "notes": [
+            {
+              "string": 5,
+              "fret": 3,
+              "technique": {
+                "type": "hammer_on"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "error": "INVALID_SCHEMA",
+  "path": "schema_version",
+  "schema_valid": false
+}

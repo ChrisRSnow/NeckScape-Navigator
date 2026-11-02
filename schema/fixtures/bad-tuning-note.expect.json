@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "error": "INVALID_SCHEMA",
+  "path": "tuning.strings[2]",
+  "schema_valid": false
+}

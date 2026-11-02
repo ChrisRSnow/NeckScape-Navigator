@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "type": "scale",
+  "root": "A",
+  "scale": "minor_pentatonic",
+  "fret_range": [
+    5,
+    8
+  ],
+  "highlight": {
+    "roots": true,
+    "chord_tones_of": "Am"
+  }
+}

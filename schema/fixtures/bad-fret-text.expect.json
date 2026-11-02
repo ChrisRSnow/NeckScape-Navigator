@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "error": "INVALID_SCHEMA",
+  "path": "chords.G.frets[5]",
+  "schema_valid": false
+}

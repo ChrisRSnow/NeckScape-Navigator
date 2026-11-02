@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0",
+  "type": "tab",
+  "source": "ai_generated",
+  "title": "A minor pentatonic lick",
+  "attribution": "Original exercise",
+  "tuning": {
+    "name": "Standard",
+    "strings": [
+      "E2",
+      "A2",
+      "D3",
+      "G3",
+      "B3",
+      "E4"
+    ]
+  },
+  "time_signature": "4/4",
+  "measures": [
+    {
+      "events": [
+        {
+          "at": 0,
+          "dur": 0.5,
+          "notes": [
+            {
+              "string": 2,
+              "fret": 8
+            }
+          ]
+        },
+        {
+          "at": 0.5,
+          "dur": 0.5,
+          "notes": [
+            {
+              "string": 2,
+              "fret": 5
+            }
+          ]
+        },
+        {
+          "at": 1,
+          "dur": 1,
+          "notes": [
+            {
+              "string": 3,
+              "fret": 7,
+              "technique": {
+                "type": "bend",
+                "semitones": 2
+              }
+            }
+          ]
+        },
+        {
+          "at": 2,
+          "dur": 2,
+          "notes": [
+            {
+              "string": 3,
+              "fret": 5,
+              "technique": {
+                "type": "vibrato"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

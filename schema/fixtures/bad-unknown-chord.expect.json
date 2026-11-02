@@ -1,0 +1,6 @@
+{
+  "ok": false,
+  "error": "INVALID_SCHEMA",
+  "path": "sections[0].bars[1][0]",
+  "schema_valid": true
+}

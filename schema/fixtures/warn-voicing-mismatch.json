@@ -1,0 +1,131 @@
+{
+  "schema_version": "1.0",
+  "type": "progression",
+  "source": "ai_generated",
+  "title": "House of the Rising Sun",
+  "attribution": "Traditional",
+  "key": {
+    "tonic": "A",
+    "mode": "minor"
+  },
+  "time_signature": "6/8",
+  "tuning": {
+    "name": "Standard",
+    "strings": [
+      "E2",
+      "A2",
+      "D3",
+      "G3",
+      "B3",
+      "E4"
+    ]
+  },
+  "voicing_style": "open",
+  "chords": {
+    "Am": {
+      "frets": [
+        null,
+        0,
+        2,
+        2,
+        1,
+        0
+      ]
+    },
+    "C": {
+      "frets": [
+        null,
+        3,
+        2,
+        0,
+        1,
+        0
+      ]
+    },
+    "D": {
+      "frets": [
+        null,
+        null,
+        0,
+        2,
+        3,
+        2
+      ]
+    },
+    "F": {
+      "frets": [
+        1,
+        3,
+        3,
+        2,
+        1,
+        0
+      ]
+    },
+    "E": {
+      "frets": [
+        0,
+        2,
+        2,
+        1,
+        0,
+        0
+      ]
+    }
+  },
+  "sections": [
+    {
+      "name": "Verse",
+      "bars": [
+        [
+          "Am"
+        ],
+        [
+          "C"
+        ],
+        [
+          "D"
+        ],
+        [
+          "F"
+        ],
+        [
+          "Am"
+        ],
+        [
+          "C"
+        ],
+        [
+          "E"
+        ],
+        [
+          "E"
+        ],
+        [
+          "Am"
+        ],
+        [
+          "C"
+        ],
+        [
+          "D"
+        ],
+        [
+          "F"
+        ],
+        [
+          "Am"
+        ],
+        [
+          "E"
+        ],
+        [
+          "Am"
+        ],
+        [
+          "E"
+        ]
+      ]
+    }
+  ]
+}

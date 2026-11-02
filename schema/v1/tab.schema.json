@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/neckscape-navigator/schema/v1/tab.schema.json",
+  "title": "NeckScape tab (schema v1)",
+  "type": "object",
+  "required": ["schema_version", "type", "title", "measures"],
+  "allOf": [{ "$ref": "common.schema.json#/$defs/online_fields" }],
+  "properties": {
+    "schema_version": { "$ref": "common.schema.json#/$defs/version" },
+    "type": { "const": "tab" },
+    "source": { "$ref": "common.schema.json#/$defs/source" },
+    "title": { "type": "string" },
+    "attribution": { "type": "string" },
+    "time_signature": { "$ref": "common.schema.json#/$defs/time_signature" },
+    "tempo_bpm": { "$ref": "common.schema.json#/$defs/tempo_bpm" },
+    "capo": { "$ref": "common.schema.json#/$defs/capo" },
+    "tuning": { "$ref": "common.schema.json#/$defs/tuning" },
+    "measures": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["events"],
+        "properties": {
+          "marker": { "type": "string", "description": "Section that starts here, e.g. Solo" },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["at", "notes"],
+              "properties": {
+                "at": { "type": "number", "minimum": 0, "description": "Quarter notes from the start of the measure" },
+                "dur": { "type": ["number", "null"], "exclusiveMinimum": 0, "description": "Quarter notes; null when unknown (text tabs)" },
+                "notes": {
+                  "type": "array",
+                  "description": "Empty = rest",
+                  "items": {
+                    "type": "object",
+                    "required": ["string", "fret"],
+                    "properties": {
+                      "string": { "type": "integer", "minimum": 1, "maximum": 12, "description": "1 = first (highest) string" },
+                      "fret": { "type": "integer", "minimum": 0, "maximum": 36 },
+                      "technique": {
+                        "type": "object",
+                        "required": ["type"],
+                        "properties": {
+                          "type": { "enum": ["bend", "release", "slide_to", "hammer_on", "pull_off", "vibrato", "palm_mute", "harmonic", "let_ring"] },
+                          "semitones": { "type": "number" },
+                          "fret": { "type": "integer", "minimum": 0, "maximum": 36 }
+                        },
+                        "allOf": [
+                          { "if": { "properties": { "type": { "const": "bend" } } }, "then": { "required": ["semitones"] } },
+                          { "if": { "properties": { "type": { "const": "slide_to" } } }, "then": { "required": ["fret"] } }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

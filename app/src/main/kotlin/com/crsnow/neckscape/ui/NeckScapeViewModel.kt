@@ -1,0 +1,443 @@
+package com.crsnow.neckscape.ui
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.crsnow.neckscape.theory.ChordType
+import com.crsnow.neckscape.theory.Chords
+import com.crsnow.neckscape.song.BridgeError
+import com.crsnow.neckscape.song.Importers
+import com.crsnow.neckscape.song.Progression
+import com.crsnow.neckscape.song.ScaleOverlay
+import com.crsnow.neckscape.song.Song
+import com.crsnow.neckscape.song.Tab
+import com.crsnow.neckscape.song.barsOf
+import com.crsnow.neckscape.song.schedule
+import com.crsnow.neckscape.theory.ChordSymbol
+import com.crsnow.neckscape.theory.Interval
+import com.crsnow.neckscape.theory.Level
+import com.crsnow.neckscape.theory.Note
+import com.crsnow.neckscape.theory.Position
+import com.crsnow.neckscape.theory.Scale
+import com.crsnow.neckscape.theory.ScaleFamily
+import com.crsnow.neckscape.theory.Scales
+import com.crsnow.neckscape.theory.Tuning
+import com.crsnow.neckscape.theory.Tunings
+import com.crsnow.neckscape.theory.Voicing
+import com.crsnow.neckscape.theory.VoicingFinder
+import com.crsnow.neckscape.theory.allowsScale
+import com.crsnow.neckscape.theory.nearestChord
+import com.crsnow.neckscape.theory.nearestScale
+import com.crsnow.neckscape.theory.pickVoicing
+import com.crsnow.neckscape.theory.allows
+import com.crsnow.neckscape.theory.withCapo
+import com.crsnow.neckscape.theory.scaleIndices
+import com.crsnow.neckscape.theory.fitsIn
+import com.crsnow.neckscape.theory.scaleFor
+import com.crsnow.neckscape.theory.tonicChord
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+
+/** [Song]: a progression or tab pushed by an AI or imported from a file (or an empty neck). */
+enum class ViewMode { Scale, Arpeggio, Chord, Song }
+
+/** How the notes are shown: on the neck, in standard notation, or as tab. */
+enum class Display { Fretboard, Score, Tab }
+enum class LabelMode { Notes, Intervals }
+
+const val MIN_TEMPO = 40
+const val MAX_TEMPO = 240
+
+/** Stored range end meaning "as far as the neck goes", so it survives fret/string count changes. */
+private const val TO_END = Int.MAX_VALUE
+
+data class UiState(
+    val viewMode: ViewMode = ViewMode.Scale,
+    val display: Display = Display.Fretboard,
+    /** Which chords and scales are offered. */
+    val level: Level = Level.Advanced,
+    val root: Note = Note(0),
+    val familyIndex: Int = 0,
+    val scaleIndex: Int = 0,
+    val chordIndex: Int = 0,
+    val tuningIndex: Int = 0,
+    /** Overrides the preset when the user has edited the tuning. */
+    val customTuning: Tuning? = null,
+    val fretCount: Int = 22,
+    val fretFrom: Int = 0,
+    val fretTo: Int = TO_END,
+    val stringFrom: Int = 0,
+    val stringTo: Int = TO_END,
+    val labelMode: LabelMode = LabelMode.Notes,
+    val showOrder: Boolean = true,
+    /** Scale playback speed, one note per beat. */
+    val tempo: Int = 180,
+    val leftHanded: Boolean = false,
+    val diatonicSevenths: Boolean = false,
+    /** Index into the voicing list, or -1 to show every chord tone. */
+    val voicingIndex: Int = -1,
+    /** A progression or tab pushed by an AI or imported (shown in ViewMode.Song). */
+    val song: Song? = null,
+    /** The bar (progression) or measure (tab) on the neck. */
+    val songBar: Int = 0,
+    /** A scale drawn under whatever else is showing. */
+    val overlay: ScaleOverlay? = null,
+    /** Notes marked by highlight_notes, with a caption. */
+    val highlights: Highlights? = null,
+    val capo: Int = 0,
+    /** How many pushed changes Undo can take back. */
+    val undoDepth: Int = 0,
+) {
+    val family: ScaleFamily get() = Scales.families[familyIndex]
+    val scale: Scale get() = family.scales[scaleIndex]
+    val chord: ChordType get() = Chords.all[chordIndex]
+    /** The strings as tuned, before any capo. */
+    val baseTuning: Tuning get() = customTuning ?: Tunings.all[tuningIndex]
+
+    /** What the frets sound: with a capo, fret 0 is the capo. */
+    val tuning: Tuning get() = baseTuning.withCapo(capo)
+
+    /** Seventh chords are past Beginner, so the switch only counts above it. */
+    val sevenths: Boolean get() = diatonicSevenths && level != Level.Beginner
+
+    val fretRange: IntRange
+        get() = fretFrom.coerceIn(0, fretCount).let { from -> from..fretTo.coerceIn(from, fretCount) }
+
+    /** String indices, lowest-pitched string = 0. */
+    val stringRange: IntRange
+        get() = (tuning.strings - 1).let { top -> stringFrom.coerceIn(0, top).let { from -> from..stringTo.coerceIn(from, top) } }
+
+    /** Intervals of whatever is on the fretboard right now. */
+    val intervals: List<Interval>
+        get() = if (viewMode == ViewMode.Scale) scale.intervals else chord.intervals
+
+    val title: String
+        get() = when (viewMode) {
+            ViewMode.Scale -> "${root.name} ${scale.name}"
+            ViewMode.Arpeggio -> "${root.name} ${chord.name} arpeggio — ${chord.displayName(root)}"
+            ViewMode.Chord -> "${chord.displayName(root)} — ${root.name} ${chord.name}"
+            ViewMode.Song -> song?.title ?: overlay?.let { "${it.root.name} ${it.name}" } ?: "Nothing loaded"
+        }
+
+    /** The chord symbol of the bar on the neck, for a progression. */
+    val songChord: String?
+        get() = (song as? Progression)?.flatBars?.getOrNull(songBar)?.second?.firstOrNull()
+}
+
+/** Notes marked by highlight_notes. */
+data class Highlights(val positions: Set<Position>, val label: String?)
+
+/** What playback is doing, for get_state and the Play button. */
+data class Playback(val playing: Boolean = false, val looping: Boolean = false, val section: String? = null)
+
+/** Shapes inside the selected frets and strings; open strings only count if fret 0 is included. */
+private fun Voicing.fits(frets: IntRange, strings: IntRange) =
+    this.frets.withIndex().all { (s, f) -> f == null || (s in strings && f in frets) }
+
+/** The inputs that determine the voicing list. */
+private data class VoicingKey(val mode: ViewMode, val tuning: Tuning, val root: Note, val chord: ChordType, val frets: Int)
+
+private val UiState.voicingKey get() = VoicingKey(viewMode, tuning, root, chord, fretCount)
+
+class NeckScapeViewModel : ViewModel() {
+    private val _state = MutableStateFlow(UiState())
+    val state: StateFlow<UiState> = _state.asStateFlow()
+
+    // Kept out of UiState: it changes several times a second during playback
+    // and has nothing to do with what's selected.
+    private val _sounding = MutableStateFlow(emptySet<Position>())
+
+    /** Positions sounding right now; the fretboard rings them. */
+    val sounding: StateFlow<Set<Position>> = _sounding.asStateFlow()
+    private var followJob: Job? = null
+
+    /** Rings each group in turn, [step] seconds apart, then clears after [hold] — in time with the audio. */
+    fun follow(groups: List<Set<Position>>, step: Double, hold: Double = 0.5) {
+        followJob?.cancel()
+        followJob = viewModelScope.launch {
+            for (group in groups) {
+                _sounding.value = group
+                delay((step * 1000).toLong())
+            }
+            delay((hold * 1000).toLong())
+            _sounding.value = emptySet()
+        }
+    }
+
+    /** Sets the ringed positions directly (scripted demos). */
+    fun setSounding(positions: Set<Position>) {
+        followJob?.cancel()
+        _sounding.value = positions
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val allVoicings = _state
+        .map { it.voicingKey }
+        .distinctUntilChanged()
+        .mapLatest { key ->
+            if (key.mode != ViewMode.Chord) emptyList()
+            else VoicingFinder.find(key.tuning, key.root, key.chord, key.frets)
+        }
+        .flowOn(Dispatchers.Default)
+
+    val voicings: StateFlow<List<Voicing>> = combine(
+        allVoicings,
+        _state.map { it.fretRange to it.stringRange }.distinctUntilChanged(),
+    ) { shapes, (frets, strings) -> shapes.filter { it.fits(frets, strings) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private fun edit(block: UiState.() -> UiState) = _state.update { old ->
+        val new = old.block()
+        val changed = new.voicingKey != old.voicingKey ||
+            new.fretRange != old.fretRange || new.stringRange != old.stringRange
+        if (changed) new.copy(voicingIndex = -1) else new
+    }
+
+    /** Re-spell the root (C♯ vs D♭) to suit what's now displayed. */
+    private fun UiState.respelled() = copy(root = Note.bestSpelling(root.pitchClass, intervals))
+
+    /** Swaps anything the level doesn't offer for the closest thing it does. */
+    private fun UiState.fitLevel(): UiState {
+        val (f, s) = level.nearestScale(familyIndex, scaleIndex)
+        return copy(familyIndex = f, scaleIndex = s, chordIndex = Chords.all.indexOf(level.nearestChord(chord)))
+    }
+
+    /**
+     * Switching keeps scale and chord related: C Ionian ⇄ C, C Dorian ⇄ Cm,
+     * Cm7 → C Aeolian. Chord and arpeggio share the chord.
+     */
+    fun setViewMode(mode: ViewMode) = edit {
+        if (mode == viewMode) return@edit this
+        when {
+            mode == ViewMode.Song -> copy(viewMode = mode)
+            mode != ViewMode.Scale && viewMode != ViewMode.Scale -> copy(viewMode = mode)
+            mode != ViewMode.Scale -> {
+                val fitting = if (chord.fitsIn(scale)) chord else tonicChord(scale, sevenths) ?: chord
+                copy(viewMode = mode, chordIndex = Chords.all.indexOf(level.nearestChord(fitting)))
+            }
+            else -> {
+                val (f, s) = if (chord.fitsIn(scale)) familyIndex to scaleIndex
+                else scaleFor(chord, familyIndex, level::allowsScale) ?: (familyIndex to scaleIndex)
+                copy(viewMode = mode, familyIndex = f, scaleIndex = s)
+            }
+        }.fitLevel().respelled()
+    }
+
+    fun setDisplay(display: Display) = edit { copy(display = display) }
+
+    fun setLevel(level: Level) = edit { copy(level = level).fitLevel().respelled() }
+
+    fun selectRoot(pitchClass: Int) = edit { copy(root = Note.bestSpelling(pitchClass, intervals)) }
+
+    fun selectFamily(index: Int) = edit {
+        val first = level.scaleIndices().firstOrNull { it.first == index }?.second ?: 0
+        copy(familyIndex = index, scaleIndex = first).respelled()
+    }
+
+    fun selectScale(index: Int) = edit { copy(scaleIndex = index).respelled() }
+
+    fun selectChord(index: Int) = edit { copy(chordIndex = index).respelled() }
+
+    /**
+     * Jump from the chip for [degree] (0-based) to that chord, keeping the scale's
+     * spelling of its root. In a modal family the scale follows along (Dm from
+     * C Ionian → D Dorian), so switching back shows the same notes.
+     */
+    fun openChord(degree: Int, root: Note, type: ChordType) = edit {
+        val rotated = (scaleIndex + degree) % family.scales.size
+        val mode = if (family.modal && level.allowsScale(familyIndex, rotated)) rotated else scaleIndex
+        copy(viewMode = ViewMode.Chord, root = root, scaleIndex = mode, chordIndex = Chords.all.indexOf(type))
+    }
+
+    fun selectTuning(index: Int) = edit { copy(tuningIndex = index, customTuning = null) }
+
+    fun retuneString(string: Int, semitones: Int) = edit { copy(customTuning = baseTuning.retune(string, semitones)) }
+
+    fun resetTuning() = edit { copy(customTuning = null) }
+
+    fun setFretCount(count: Int) = edit { copy(fretCount = count) }
+
+    fun setFretRange(from: Int, to: Int) = edit {
+        copy(fretFrom = from, fretTo = if (to >= fretCount) TO_END else to)
+    }
+
+    fun setStringRange(from: Int, to: Int) = edit {
+        copy(stringFrom = from, stringTo = if (to >= tuning.strings - 1) TO_END else to)
+    }
+
+    fun setLabelMode(mode: LabelMode) = edit { copy(labelMode = mode) }
+
+    fun setShowOrder(show: Boolean) = edit { copy(showOrder = show) }
+
+    fun setTempo(bpm: Int) = edit { copy(tempo = bpm.coerceIn(MIN_TEMPO, MAX_TEMPO)) }
+
+    fun setLeftHanded(left: Boolean) = edit { copy(leftHanded = left) }
+
+    fun setDiatonicSevenths(sevenths: Boolean) = edit { copy(diatonicSevenths = sevenths) }
+
+    fun stepVoicing(delta: Int) {
+        val count = voicings.value.size
+        if (count == 0) return
+        // Cycles: all tones (-1) → shape 0 → … → shape n-1 → all tones.
+        edit { copy(voicingIndex = Math.floorMod(voicingIndex + 1 + delta, count + 1) - 1) }
+    }
+
+    // ---- Content pushed from outside: the AI bridge and file imports ----
+
+    private val undo = ArrayDeque<UiState>()
+
+    /** Applies a pushed change, keeping what was there for Undo. */
+    private fun push(block: UiState.() -> UiState) = synchronized(undo) {
+        undo.addLast(_state.value)
+        if (undo.size > 30) undo.removeFirst()
+        edit { block().copy(undoDepth = undo.size) }
+    }
+
+    /** Takes back the last pushed change. */
+    fun undo() = synchronized(undo) {
+        val previous = undo.removeLastOrNull() ?: return@synchronized
+        stopPlayback()
+        _state.value = previous.copy(undoDepth = undo.size)
+    }
+
+    private fun UiState.fullNeck() = copy(fretFrom = 0, fretTo = TO_END, stringFrom = 0, stringTo = TO_END)
+
+    /** Uses [t] as the tuning: a preset if one matches, else a custom tuning. */
+    private fun UiState.tunedTo(t: Tuning): UiState {
+        val preset = Tunings.all.indexOfFirst { it.midi == t.midi }
+        return if (preset >= 0) copy(tuningIndex = preset, customTuning = null) else copy(customTuning = t)
+    }
+
+    fun loadSong(song: Song) {
+        stopPlayback()
+        push { loaded(song) }
+    }
+
+    private fun UiState.loaded(song: Song) =
+        (song.tuning?.let { tunedTo(it) } ?: this).fullNeck().copy(
+            viewMode = ViewMode.Song, song = song, songBar = 0, capo = song.capo, overlay = null, highlights = null,
+        )
+
+    fun setTuning(tuning: Tuning?, capo: Int?) = push {
+        (tuning?.let { tunedTo(it) } ?: this).copy(capo = capo ?: this.capo)
+    }
+
+    /** Chord view of [symbol], with a shape picked in [style]. */
+    fun showChord(symbol: ChordSymbol, style: String) {
+        push {
+            copy(
+                viewMode = ViewMode.Chord, root = symbol.root, chordIndex = Chords.all.indexOf(symbol.type),
+                level = if (level.allows(symbol.type)) level else Level.Advanced,
+            ).fullNeck()
+        }
+        val s = _state.value
+        val shapes = VoicingFinder.find(s.tuning, s.root, s.chord, s.fretCount)
+        val pick = pickVoicing(s.tuning, ChordSymbol(symbol.root, symbol.type), style, s.fretCount)
+        edit { copy(voicingIndex = shapes.indexOf(pick)) }
+    }
+
+    /** A scale on its own (the Scale view, or the Song view for custom intervals) or [over] the current content. */
+    fun showScale(scale: ScaleOverlay, over: Boolean) = push {
+        val named = scale.scale
+        when {
+            over -> copy(overlay = scale)
+            named != null -> {
+                val (f, i) = named
+                val allowed = Scales.families[f].let { level.allows(it, it.scales[i]) }
+                fullNeck().copy(
+                    viewMode = ViewMode.Scale, root = scale.root, familyIndex = f, scaleIndex = i, overlay = null,
+                    level = if (allowed) level else Level.Advanced,
+                    fretFrom = scale.fretRange?.first ?: 0, fretTo = scale.fretRange?.last ?: TO_END,
+                )
+            }
+            else -> fullNeck().copy(viewMode = ViewMode.Song, song = null, overlay = scale)
+        }
+    }
+
+    fun highlight(h: Highlights?) = push { copy(highlights = h) }
+
+    fun clearOverlay() = edit { copy(overlay = null) }
+
+    /** Opens a file the user picked; returns a line to show them (what loaded, or what went wrong). */
+    fun importUserFile(name: String, bytes: ByteArray): String = try {
+        val format = Importers.formatFor(name)
+            ?: throw BridgeError("UNSUPPORTED_FORMAT", "Can't open '$name': use Guitar Pro, MusicXML, MIDI, ChordPro or a text tab")
+        val result = Importers.import(bytes, format, name, null, null, _state.value.baseTuning)
+        loadSong(result.song)
+        "Opened ${result.song.title}" + (result.note?.let { " — $it" } ?: "")
+    } catch (e: BridgeError) {
+        e.detail
+    }
+
+    /** Empties the neck. */
+    fun clear() {
+        stopPlayback()
+        push { copy(viewMode = ViewMode.Song, song = null, songBar = 0, overlay = null, highlights = null) }
+    }
+
+    fun selectBar(index: Int) = edit {
+        val count = when (val s = song) {
+            is Progression -> s.flatBars.size
+            is Tab -> s.measures.size
+            null -> 1
+        }
+        copy(songBar = index.coerceIn(0, (count - 1).coerceAtLeast(0)))
+    }
+
+    // ---- Playback of pushed content ----
+
+    /** Set by the platform's entry point; null where there's no sound (tests). */
+    @Volatile var player: NotePlayer? = null
+    private val _playback = MutableStateFlow(Playback())
+    val playback: StateFlow<Playback> = _playback.asStateFlow()
+    private var playJob: Job? = null
+
+    /** Plays the loaded song (or one [section]); returns what it's doing. */
+    fun playSong(loop: Boolean, section: String?, tempoPct: Double): String {
+        val s = _state.value
+        val song = s.song ?: throw BridgeError("NOT_FOUND", "Nothing to play — load a progression or tab first")
+        val plan = schedule(song, s.tuning, s.fretCount, section, tempoPct)
+        stopPlayback()
+        _playback.value = Playback(playing = true, looping = loop, section = section)
+        playJob = viewModelScope.launch {
+            do {
+                player?.play(plan.notes, ring = 1.6)
+                var last = 0.0
+                for (step in plan.steps) {
+                    delay(((step.at - last) * 1000).toLong())
+                    last = step.at
+                    edit { copy(songBar = step.bar) }
+                    _sounding.value = step.positions
+                }
+                delay(((plan.seconds - last) * 1000).toLong().coerceAtLeast(0))
+            } while (loop)
+            _sounding.value = emptySet()
+            _playback.value = Playback()
+        }
+        return plan.summary + if (loop) ", looping" else ""
+    }
+
+    fun stopPlayback() {
+        playJob?.cancel()
+        playJob = null
+        player?.stop()
+        _sounding.value = emptySet()
+        _playback.value = Playback()
+    }
+
+    /** Bars of the current song, for the section list. */
+    fun sectionBars(section: String?): IntRange? = _state.value.song?.barsOf(section)
+}

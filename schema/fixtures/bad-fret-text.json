@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "type": "progression",
+  "title": "x",
+  "chords": {
+    "G": {
+      "frets": [
+        3,
+        2,
+        0,
+        0,
+        0,
+        "3"
+      ]
+    }
+  },
+  "sections": [
+    {
+      "bars": [
+        [
+          "G"
+        ]
+      ]
+    }
+  ]
+}
