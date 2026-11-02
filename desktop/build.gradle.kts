@@ -57,13 +57,19 @@ compose.desktop {
             packageVersion = "1.1.0"
             description = "Scales and chords on a guitar fretboard"
             vendor = "crsnow"
+            // Drawn by tools/make_icons.py.
             linux {
                 shortcut = true
                 menuGroup = "Audio"
+                iconFile.set(rootProject.file("icons/neckscape.png"))
             }
             windows {
                 menu = true
                 shortcut = true
+                iconFile.set(rootProject.file("icons/neckscape.ico"))
+            }
+            macOS {
+                iconFile.set(rootProject.file("icons/neckscape.icns"))
             }
         }
     }

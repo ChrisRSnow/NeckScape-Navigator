@@ -7,6 +7,8 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -14,6 +16,7 @@ import androidx.compose.ui.window.rememberWindowState
 import java.awt.Desktop
 import java.awt.FileDialog
 import java.io.File
+import javax.imageio.ImageIO
 import com.crsnow.neckscape.bridge.BridgeServer
 import com.crsnow.neckscape.song.Importers
 import com.crsnow.neckscape.ui.AiTools
@@ -44,6 +47,7 @@ fun main() = application {
             exitApplication()
         },
         title = "NeckScape-Navigator",
+        icon = remember { BitmapPainter(ImageIO.read(object {}.javaClass.getResource("/icon.png")).toComposeImageBitmap()) },
         state = rememberWindowState(width = 1280.dp, height = 900.dp),
     ) {
         MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {

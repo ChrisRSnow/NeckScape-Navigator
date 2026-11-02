@@ -77,10 +77,11 @@ WIN="$(mktemp -d)"
 trap 'rm -rf "$DEB" "$WIN"' EXIT
 mkdir -p "$WIN/NeckScape"
 cp "$JAR" "$WIN/NeckScape/NeckScape.jar"
+cp "$ROOT/icons/neckscape.ico" "$WIN/NeckScape/NeckScape.ico"
 unzip -q "$(temurin windows x64 jre)" -d "$WIN"
 mv "$WIN"/jdk-*-jre "$WIN/NeckScape/runtime"
 printf '@echo off\r\nstart "" "%%~dp0runtime\\bin\\javaw.exe" -jar "%%~dp0NeckScape.jar"\r\n' > "$WIN/NeckScape/NeckScape.bat"
-printf 'NeckScape-Navigator for Windows\r\n\r\nDouble-click NeckScape.bat to start. Nothing to install; delete the folder to remove.\r\nIncludes Eclipse Temurin Java runtime (GPLv2 with Classpath Exception), see runtime\\legal.\r\n' > "$WIN/NeckScape/README.txt"
+printf 'NeckScape-Navigator for Windows\r\n\r\nDouble-click NeckScape.bat to start. Nothing to install; delete the folder to remove.\r\nFor a desktop shortcut with the logo: right-click NeckScape.bat > Show more options > Create shortcut, then shortcut Properties > Change Icon > NeckScape.ico.\r\nIncludes Eclipse Temurin Java runtime (GPLv2 with Classpath Exception), see runtime\\legal.\r\n' > "$WIN/NeckScape/README.txt"
 (cd "$WIN" && zip -qr "$DIST/frets-windows.zip" NeckScape)
 
 # macOS: NeckScape.app/Contents/{Info.plist, MacOS/NeckScape, Resources/NeckScape.jar, runtime/}
@@ -93,6 +94,7 @@ macos() { # gradle-os temurin-arch zip-suffix description
     app="$mac/NeckScape.app/Contents"
     mkdir -p "$app/MacOS" "$app/Resources"
     cp "$jar" "$app/Resources/NeckScape.jar"
+    cp "$ROOT/icons/neckscape.icns" "$app/Resources/NeckScape.icns"
     tar -xzf "$(temurin mac "$2" jre)" -C "$mac"
     mv "$mac"/jdk-*-jre "$app/runtime"
     cat > "$app/MacOS/NeckScape" <<'LAUNCHER'
@@ -109,6 +111,7 @@ LAUNCHER
   <key>CFBundleDisplayName</key><string>NeckScape-Navigator</string>
   <key>CFBundleIdentifier</key><string>com.crsnow.neckscape</string>
   <key>CFBundleExecutable</key><string>NeckScape</string>
+  <key>CFBundleIconFile</key><string>NeckScape</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>

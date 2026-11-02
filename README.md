@@ -1,3 +1,5 @@
+<img src="icons/neckscape.png" width="160" align="right" alt="NeckScape-Navigator logo: a ship's wheel with guitar necks for spokes">
+
 # NeckScape-Navigator
 
 A landscape of the guitar neck, and a way to navigate it (yes, the name is a nod to Netscape Navigator).
@@ -115,6 +117,12 @@ circles and filled outlines, with text and music symbols as glyph outlines, so
 the screen and the PDF match exactly and the PDF needs no fonts. To change the
 glyph set, edit `tools/gen_glyphs.py` and run it with fontTools against
 `Bravura.otf` and the DejaVu Sans TTFs (usage in the script).
+
+## Logo
+
+`tools/make_icons.py` draws it (a ship's wheel whose spokes are guitar necks, six-in-line
+and three-a-side headstocks alternating) and writes every platform's icon: Android
+adaptive layers (with a monochrome layer for themed icons), `.ico`, `.icns` and `.png`.
 
 ## Licences
 
