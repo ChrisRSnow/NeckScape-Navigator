@@ -83,6 +83,16 @@ Guitar Pro reader is its own code.
 `demo/library/Traditional - Greensleeves.musicxml` is the traditional English
 tune (public domain), arranged for this project.
 
+## Trademarks
+
+Guitar Pro is a trademark of Arobas Music. MusicXML is a registered trademark of
+MakeMusic, Inc. MIDI is a trademark of the Association of Musical Electronics
+Industry (AMEI) and the MIDI Manufacturers Association. These names are used only
+to say which files NeckScape-Navigator can open or save; it isn't affiliated
+with, sponsored by or endorsed by any of these companies. The file readers are
+written from the formats' published documentation and don't use code from the
+owners' software.
+
 ## Feature video
 
 The narration in the feature video was synthesised offline with

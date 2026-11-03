@@ -148,6 +148,11 @@ NeckScape-Navigator is MIT licensed ([LICENSE](LICENSE)). Third-party material â
 OFL 1.1), DejaVu Sans (Bitstream Vera licence), Compose/Kotlin (Apache 2.0),
 bundled Temurin runtime (GPLv2 + Classpath Exception).
 
+Guitar Pro (Arobas Music), MusicXML (MakeMusic, Inc.) and MIDI (AMEI and the MIDI
+Manufacturers Association) are trademarks of their owners, named here only to
+describe the file formats NeckScape-Navigator reads and writes. NeckScape-Navigator
+isn't affiliated with or endorsed by them.
+
 ## Extending the dictionaries
 
 Add to the curated lists in `Scales.kt` / `Chords.kt` by hand. Anything in
