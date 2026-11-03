@@ -149,4 +149,31 @@ class SnapshotTest {
 
     /** A smaller phone on its side (≈ 700 × 390 dp): still two panes, narrower sidebar. */
     @Test fun smallPhoneLandscape() = snapshot("phone-landscape-small", 1920, 1080, 2.75f)
+
+    @Test fun chordScoreBeginner() = snapshot("chord-score-beginner", 1280, 1000, 1f) {
+        it.setViewMode(ViewMode.Chord)
+        it.setDisplay(Display.Score)
+    }
+
+    @Test fun chordTabCaged() = snapshot("chord-tab-caged", 1280, 1000, 1f) {
+        it.setLevel(Level.Intermediate)
+        it.setViewMode(ViewMode.Chord)
+        it.setCaged(2)
+        it.setDisplay(Display.Tab)
+    }
+
+    @Test fun chordScoreSeventh() = snapshot("chord-score-seventh", 1280, 1000, 1f) {
+        it.setLevel(Level.Intermediate)
+        it.setViewMode(ViewMode.Chord)
+        it.selectChord(Chords.all.indexOfFirst { c -> c.symbol == "maj7" })
+        it.setDisplay(Display.Score)
+    }
+
+    private fun loadRisingSun(vm: NeckScapeViewModel) {
+        val payload = com.crsnow.neckscape.song.Json.parse(File("../schema/fixtures/good-house-of-the-rising-sun.json").readText())
+        com.crsnow.neckscape.ui.AiTools(vm, "test").call("load_progression", mapOf("progression" to payload))
+    }
+    @Test fun songScore() = snapshot("song-score", 1280, 1000, 1f) { loadRisingSun(it); it.setDisplay(Display.Score) }
+    @Test fun songTab() = snapshot("song-tab", 1280, 1000, 1f) { loadRisingSun(it); it.setDisplay(Display.Tab) }
+    @Test fun chordScorePhone() = snapshot("chord-score-phone", 1080, 2376, 2.75f) { it.setViewMode(ViewMode.Chord); it.setDisplay(Display.Score) }
 }

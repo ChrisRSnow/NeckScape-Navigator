@@ -207,8 +207,12 @@ fun musicForSong(state: UiState, dots: List<Dot>): Music {
         is Progression -> song.flatBars.forEachIndexed { b, (_, chords) ->
             chords.forEachIndexed { i, symbol ->
                 val v = song.voicingFor(symbol, state.baseTuning, state.fretCount)
-                if (v != null) boxes.putIfAbsent(symbol, v)
-                events += SheetEvent(v?.positions()?.toList().orEmpty(), whole = true, label = symbol, barAfter = i == chords.lastIndex, group = b)
+                // Each chord's box shows over its first appearance, as in a songbook.
+                val first = v != null && boxes.putIfAbsent(symbol, v) == null
+                events += SheetEvent(
+                    v?.positions()?.toList().orEmpty(), whole = true, label = symbol, barAfter = i == chords.lastIndex,
+                    group = b, diagram = v?.frets?.takeIf { first },
+                )
             }
         }
         is Tab -> song.measures.forEachIndexed { m, measure ->

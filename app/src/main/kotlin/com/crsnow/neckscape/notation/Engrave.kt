@@ -18,7 +18,8 @@ data class PrintDot(val position: Position, val mark: Mark, val step: Int?)
 /**
  * One thing in time for songs (progressions, tabs): its notes, a label above
  * (chord symbol, section), whether a barline follows, a technique mark for the
- * tab, and [group] (the bar it belongs to) for highlighting.
+ * tab, [group] (the bar it belongs to) for highlighting, and for a chord the
+ * [diagram] (frets, low string first) drawn as a chord box above it.
  */
 data class SheetEvent(
     val positions: List<Position>,
@@ -27,6 +28,7 @@ data class SheetEvent(
     val barAfter: Boolean = false,
     val mark: String? = null,
     val group: Int = 0,
+    val diagram: List<Int?>? = null,
 )
 
 /** One chip of the legend: note name, interval label, colour. */
@@ -66,7 +68,10 @@ private class Clef(val glyph: Char, val transpose: Int, val bottomLine: Int, val
 private class Head(val position: Position, val step: Int, val accidental: Int, var showAccidental: Int? = null)
 
 /** One thing in time: a single note of a scale, or a whole chord shape. */
-private class Event(val heads: List<Head>, val whole: Boolean, val label: String?, val group: Int, val barAfter: Boolean, val mark: String? = null) {
+private class Event(
+    val heads: List<Head>, val whole: Boolean, val label: String?, val group: Int, val barAfter: Boolean,
+    val mark: String? = null, val diagram: List<Int?>? = null,
+) {
     var accColumns = 0
     val accColumn = HashMap<Head, Int>()
 }
@@ -89,14 +94,15 @@ class Engraver(private val music: Music, private val sp: Float) {
 
     private fun buildEvents(): List<Event> = if (music.events.isNotEmpty()) {
         music.events.map { e ->
-            Event(e.positions.map(::head).sortedBy { it.step }, e.whole, e.label, e.group, e.barAfter, e.mark)
+            Event(e.positions.map(::head).sortedBy { it.step }, e.whole, e.label, e.group, e.barAfter, e.mark, e.diagram)
         }
     } else if (music.sequence.isNotEmpty()) {
         music.sequence.thereAndBack().mapIndexed { i, p -> Event(listOf(head(p)), whole = false, label = null, group = i, barAfter = false) }
     } else {
         music.shapes.mapIndexed { i, v ->
             val heads = v.frets.withIndex().mapNotNull { (s, f) -> f?.let { head(Position(s, it)) } }
-            Event(heads.sortedBy { it.step }, whole = true, label = "${i + 1}", group = i, barAfter = true)
+            val name = music.shapeNames.getOrNull(i) ?: music.chordName.ifEmpty { "${i + 1}" }
+            Event(heads.sortedBy { it.step }, whole = true, label = name, group = i, barAfter = true, diagram = v.frets)
         }
     }
 
@@ -151,9 +157,26 @@ class Engraver(private val music: Music, private val sp: Float) {
     private val hasLabels get() = events.any { it.label != null }
     private val hasMarks get() = events.any { it.mark != null }
 
+    // Chord boxes above the staff, as in guitar sheet music: strings [dGap] apart, [dRows] frets deep.
+    private val dGap = 0.72f * sp
+    private val dFret = 0.85f * sp
+    private val dRows = events.mapNotNull { it.diagram?.let(::span) }.maxOrNull()?.coerceAtLeast(4) ?: 0
+    private val diagramW = dGap * (tuning.strings - 1) + 3.4f * sp
+    /** Height of the chord boxes' band (open/muted row, frets, a little air), on lines that have any. */
+    private fun Line.diagramH() = if (events.any { it.diagram != null }) 1.1f * sp + dRows * dFret + 0.8f * sp else 0f
+
+    private fun span(frets: List<Int?>): Int {
+        val fretted = frets.filterNotNull().filter { it > 0 }
+        if (fretted.isEmpty()) return 1
+        return if (fretted.max() <= 4) fretted.max() else fretted.max() - fretted.min() + 1
+    }
+
     private fun Event.headW() = if (whole) wholeW else blackW
     private fun Event.hasSeconds() = heads.zipWithNext().any { (a, b) -> b.step - a.step == 1 }
-    private fun Event.width() = accColumns * accW + headW() * (if (hasSeconds()) 2 else 1) + if (whole) 3.5f * sp else 2.3f * sp
+    private fun Event.content() = accColumns * accW + headW() * (if (hasSeconds()) 2 else 1)
+    /** Room either side of a chord so its box fits over it. */
+    private fun Event.lead() = if (diagram == null) 0f else max(0f, (diagramW - content()) / 2)
+    private fun Event.width() = 2 * lead() + content() + if (whole) 3.5f * sp else 2.3f * sp
 
     private class Line(val events: List<Event>, val xs: List<Float>)
 
@@ -180,7 +203,46 @@ class Engraver(private val music: Music, private val sp: Float) {
         }
     }
 
-    private fun Event.noteX(cell: Float) = cell + accColumns * accW
+    private fun Event.noteX(cell: Float) = cell + lead() + accColumns * accW
+
+    /**
+     * A chord box centred on [cx], its top at [top]: nut (or "5fr"), the
+     * fretted notes in degree colours, open strings as rings, muted as ×.
+     */
+    private fun Ink.drawDiagram(frets: List<Int?>, cx: Float, top: Float, tag: Tag) {
+        val n = frets.size
+        val x0 = cx - dGap * (n - 1) / 2
+        val y0 = top + 1.1f * sp
+        val fretted = frets.filterNotNull().filter { it > 0 }
+        val base = if ((fretted.maxOrNull() ?: 0) <= dRows) 1 else fretted.min()
+        val thin = 0.07f * sp
+        for (k in 0..dRows) {
+            val y = y0 + k * dFret
+            line(x0, y, x0 + dGap * (n - 1), y, if (k == 0 && base == 1) 0.32f * sp else thin, tag = tag)
+        }
+        for (s in 0 until n) line(x0 + s * dGap, y0, x0 + s * dGap, y0 + dRows * dFret, thin, tag = tag)
+        // A barre: the lowest fret held across three or more strings with nothing lower between.
+        fretted.minOrNull()?.let { low ->
+            val a = frets.indexOfFirst { it == low }
+            val b = frets.indexOfLast { it == low }
+            if (frets.count { it == low } >= 3 && (a..b).all { (frets[it] ?: -1) >= low }) {
+                val y = y0 + (low - base + 0.5f) * dFret
+                line(x0 + a * dGap, y, x0 + b * dGap, y, 0.42f * sp, tag = tag)
+            }
+        }
+        if (base > 1) text("${base}fr", x0 - 0.35f * sp, y0 + dFret * 0.5f + 0.3f * sp, 0.85f * sp, GREY, align = Align.Right, tag = tag)
+        frets.forEachIndexed { s, f ->
+            val x = x0 + s * dGap
+            when {
+                f == null -> text("×", x, y0 - 0.25f * sp, 0.85f * sp, GREY, align = Align.Center, tag = tag)
+                f == 0 -> circle(x, y0 - 0.55f * sp, 0.24f * sp, null, INK, 0.07f * sp, tag = tag)
+                else -> {
+                    val pc = (tuning.midi[s] + f) % 12
+                    circle(x, y0 + (f - base + 0.5f) * dFret, 0.3f * sp, music.colors[pc] ?: INK, tag = tag)
+                }
+            }
+        }
+    }
 
     /** The staves for every line of music, one block per line. */
     fun blocks(staves: Staves, width: Float): List<Block> {
@@ -189,7 +251,7 @@ class Engraver(private val music: Music, private val sp: Float) {
             val last = i == all.lastIndex
             val score = if (staves != Staves.Tab) scoreLayout(line) else null
             val marks = if (hasMarks) 1.4f * sp else 0f
-            val tabTop = if (score != null) score.height + 0.6f * sp + marks else if (hasLabels) 3f * sp + marks else 0.8f * sp + marks
+            val tabTop = if (score != null) score.height + 0.6f * sp + marks else if (hasLabels) 3f * sp + line.diagramH() + marks else 0.8f * sp + marks
             val height = if (staves == Staves.Score) score!!.height else tabTop + tabGap * (tuning.strings - 1) + 0.9f * sp
             Block(height) { left, top ->
                 if (score != null) drawScore(line, score, left, top, width, last)
@@ -212,7 +274,7 @@ class Engraver(private val music: Music, private val sp: Float) {
                 if (stemUp(h)) top = max(top, max(h.step + 7, 4)) else bottom = min(bottom, min(h.step - 7, 4))
             }
         }
-        val label = if (hasLabels) 1.8f * sp else 0f
+        val label = if (hasLabels) 1.8f * sp + line.diagramH() else 0f
         val topPad = (top - 8) * sp / 2 + 1.2f * sp + label
         return ScoreLayout(topPad, topPad + 4 * sp + (0 - bottom) * sp / 2 + 1.2f * sp)
     }
@@ -264,6 +326,7 @@ class Engraver(private val music: Music, private val sp: Float) {
                 }
             }
             e.label?.let { text(it, x0 + w / 2, top + 1.4f * sp, 1.3f * sp, GREY, bold = true, align = Align.Center, tag = Tag(Position(-1, -1), e.group)) }
+            e.diagram?.let { drawDiagram(it, x0 + w / 2, top + 1.9f * sp, Tag(Position(-1, -1), e.group)) }
             if (e.barAfter) {
                 val bx = cell + e.width() - 1.5f * sp
                 if (bx < left + width - 2 * sp) line(bx, staffTop, bx, bottomY, 0.16f * sp)
@@ -300,7 +363,11 @@ class Engraver(private val music: Music, private val sp: Float) {
                 rect(cx - w / 2 - 0.15f * sp, y(h.position.string) - size * 0.42f, w + 0.3f * sp, size * 0.84f, PAPER)
                 text(label, cx, y(h.position.string) + size * 0.36f, size, bold = true, align = Align.Center, tag = tag)
             }
-            if (labels) e.label?.let { text(it, cx, top - 1.4f * sp - if (hasMarks) 1.4f * sp else 0f, 1.3f * sp, GREY, bold = true, align = Align.Center, tag = Tag(Position(-1, -1), e.group)) }
+            if (labels) {
+                val labelY = top - 1.4f * sp - line.diagramH() - if (hasMarks) 1.4f * sp else 0f
+                e.label?.let { text(it, cx, labelY, 1.3f * sp, GREY, bold = true, align = Align.Center, tag = Tag(Position(-1, -1), e.group)) }
+                e.diagram?.let { drawDiagram(it, cx, labelY + 0.5f * sp, Tag(Position(-1, -1), e.group)) }
+            }
             e.mark?.let { text(it, cx, top - 0.5f * sp, 1.1f * sp, GREY, align = Align.Center) }
             if (e.barAfter) {
                 val bx = cell + e.width() - 1.5f * sp
