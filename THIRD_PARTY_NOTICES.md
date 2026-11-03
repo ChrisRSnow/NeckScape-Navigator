@@ -53,6 +53,14 @@ Bitstream Vera Fonts Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved.
 Bitstream Vera is a trademark of Bitstream, Inc. Full licence:
 [licenses/DejaVu-LICENSE.txt](licenses/DejaVu-LICENSE.txt).
 
+## Inter — the interface typeface
+
+`app/src/main/res/font/inter_*.ttf` are static Regular, Medium, SemiBold and Bold
+instances of [Inter](https://github.com/rsms/inter), cut from the variable font
+in Google Fonts. Copyright 2020 The Inter Project Authors. Licensed under the
+SIL Open Font License, Version 1.1 — full text in
+[licenses/Inter-OFL.txt](licenses/Inter-OFL.txt).
+
 ## Libraries
 
 Built with Jetpack Compose / Compose Multiplatform, Kotlin, kotlinx.coroutines

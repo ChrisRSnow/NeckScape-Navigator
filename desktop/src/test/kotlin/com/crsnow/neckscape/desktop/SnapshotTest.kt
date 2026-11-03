@@ -10,6 +10,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.crsnow.neckscape.ui.NeckScapeScreen
+import com.crsnow.neckscape.ui.NeckScapeTheme
 import com.crsnow.neckscape.ui.NeckScapeViewModel
 import com.crsnow.neckscape.theory.Level
 import com.crsnow.neckscape.theory.Chords
@@ -43,7 +44,7 @@ class SnapshotTest {
         val vm = NeckScapeViewModel()
         val scene = ImageComposeScene(width, height, Density(density)) {
             CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalScrollbars provides DesktopScrollbars) {
-                MaterialTheme(lightColorScheme()) { NeckScapeScreen(vm) }
+                NeckScapeTheme(dark = true, fontFamily = InterFamily, logo = LogoPainter) { NeckScapeScreen(vm) }
             }
         }
         scene.render()

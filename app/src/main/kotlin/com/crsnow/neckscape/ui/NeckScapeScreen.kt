@@ -2,6 +2,8 @@
 
 package com.crsnow.neckscape.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -9,38 +11,54 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -185,195 +204,166 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                // The full name where there's room; phones get the short one.
-                title = {
-                    BoxWithConstraints {
-                        Text(if (maxWidth < 260.dp) "NeckScape" else "NeckScape-Navigator", maxLines = 1)
-                    }
-                },
-                actions = {
-                    if (state.undoDepth > 0) TextButton(onClick = vm::undo) { Text("Undo") }
-                    if (opener != null) TextButton(onClick = ::openFile) { Text("Open") }
-                    TextButton(onClick = ::playAll, enabled = player != null) { Text(if (playback.playing) "■ Stop" else "▶ Play") }
-                    TextButton(onClick = { showSettings = true }) { Text("Settings") }
-                },
+            AppTopBar(
+                state = state,
+                canOpen = opener != null,
+                canSave = saver != null,
+                onUndo = vm::undo,
+                onOpen = ::openFile,
+                onPdf = ::savePdf,
+                onMidi = ::saveMidi,
+                onSettings = { showSettings = true },
             )
         },
+        bottomBar = {
+            TransportBar(state, vm, playing = playback.playing, enabled = player != null, onPlay = ::playAll)
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
     ) { padding ->
-        val page = rememberScrollState()
         val scrollbars = LocalScrollbars.current
-        Box(Modifier.fillMaxSize().padding(padding)) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(page)
-                .padding(top = 8.dp, bottom = 8.dp, end = if (scrollbars != null) 12.dp else 0.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                Level.entries.forEachIndexed { i, level ->
-                    SegmentedButton(
-                        selected = state.level == level,
-                        onClick = { vm.setLevel(level) },
-                        shape = SegmentedButtonDefaults.itemShape(i, Level.entries.size),
-                        label = { Text(level.name, maxLines = 1) },
-                    )
-                }
-            }
 
-            FlowRow(
-                Modifier.padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ViewMode.entries.filter { it != ViewMode.Song || state.song != null || isSong }.forEach { mode ->
-                    FilterChip(
-                        selected = state.viewMode == mode,
-                        onClick = { vm.setViewMode(mode) },
-                        label = { Text(mode.name) },
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                LabelMode.entries.forEach { mode ->
-                    FilterChip(
-                        selected = state.labelMode == mode,
-                        onClick = { vm.setLabelMode(mode) },
-                        label = { Text(mode.name) },
-                    )
-                }
-            }
-
-            if (!isSong) Column {
-                val roots = rememberLazyListState()
-                LazyRow(
-                    state = roots,
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    itemsIndexed(ROOT_LABELS) { pc, label ->
-                        FilterChip(
-                            selected = state.root.pitchClass == pc,
-                            onClick = { vm.selectRoot(pc) },
-                            label = { Text(label) },
+        // ---- Sections, arranged below for a wide window (sidebar + stage) or a phone (one column) ----
+        val level = @Composable {
+            Section("Level") {
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    Level.entries.forEachIndexed { i, l ->
+                        SegmentedButton(
+                            selected = state.level == l,
+                            onClick = { vm.setLevel(l) },
+                            shape = SegmentedButtonDefaults.itemShape(i, Level.entries.size),
+                            icon = {},
+                            label = { Text(l.name, maxLines = 1, style = MaterialTheme.typography.labelMedium) },
                         )
                     }
                 }
-                scrollbars?.HorizontalLazy(roots, Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             }
-
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                when (state.viewMode) {
-                    ViewMode.Scale -> {
-                        // Only what the level offers.
-                        val offered = state.level.scaleIndices()
-                        val families = offered.map { it.first }.distinct()
-                        val modes = offered.filter { it.first == state.familyIndex }.map { it.second }
-                        Picker(
-                            "Family", families.map { Scales.families[it].name }, families.indexOf(state.familyIndex).coerceAtLeast(0),
-                            { vm.selectFamily(families[it]) }, Modifier.weight(1f),
-                        )
-                        Picker(
-                            "Mode", modes.map { state.family.scales[it].name }, modes.indexOf(state.scaleIndex).coerceAtLeast(0),
-                            { vm.selectScale(modes[it]) }, Modifier.weight(1f),
+        }
+        val view = @Composable {
+            Section("Show") {
+                val modes = ViewMode.entries.filter { it != ViewMode.Song || state.song != null || isSong }
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    modes.forEachIndexed { i, m ->
+                        SegmentedButton(
+                            selected = state.viewMode == m,
+                            onClick = { vm.setViewMode(m) },
+                            shape = SegmentedButtonDefaults.itemShape(i, modes.size),
+                            icon = {},
+                            label = { Text(m.name, maxLines = 1, style = MaterialTheme.typography.labelMedium) },
                         )
                     }
-                    ViewMode.Arpeggio, ViewMode.Chord -> {
-                        val offered = state.level.chordIndices()
-                        Picker(
-                            label = if (state.viewMode == ViewMode.Chord) "Chord" else "Arpeggio",
-                            items = offered.map { Chords.all[it].displayName(state.root) + "  ·  " + Chords.all[it].name },
-                            selected = offered.indexOf(state.chordIndex).coerceAtLeast(0),
-                            onSelect = { vm.selectChord(offered[it]) },
-                            modifier = Modifier.weight(1f),
-                            header = { i ->
-                                Chords.all[offered[i]].group.takeIf { i == 0 || Chords.all[offered[i - 1]].group != it }
-                            },
-                        )
-                    }
-                    ViewMode.Song -> {}
                 }
             }
-
-            Row(
-                Modifier.padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Picker(
-                    label = "Tuning",
-                    items = Tunings.all.map { "${it.name}  ${it.stringNames.joinToString(" ")}" } +
-                        listOfNotNull(state.customTuning?.let { "Custom  ${it.stringNames.joinToString(" ")}" }),
-                    selected = if (state.customTuning != null) Tunings.all.size else state.tuningIndex,
-                    onSelect = { if (it < Tunings.all.size) vm.selectTuning(it) },
-                    modifier = Modifier.weight(1f),
+        }
+        val key = @Composable { compact: Boolean ->
+            if (!isSong) Section("Key") { RootPicker(state.root.pitchClass, compact, vm::selectRoot) }
+        }
+        val choice = @Composable { stacked: Boolean ->
+            when (state.viewMode) {
+                ViewMode.Scale -> Section("Scale") {
+                    // Only what the level offers.
+                    val offered = state.level.scaleIndices()
+                    val families = offered.map { it.first }.distinct()
+                    val modes = offered.filter { it.first == state.familyIndex }.map { it.second }
+                    val family = @Composable { m: Modifier ->
+                        Picker("Family", families.map { Scales.families[it].name }, families.indexOf(state.familyIndex).coerceAtLeast(0), { vm.selectFamily(families[it]) }, m)
+                    }
+                    val mode = @Composable { m: Modifier ->
+                        Picker("Mode", modes.map { state.family.scales[it].name }, modes.indexOf(state.scaleIndex).coerceAtLeast(0), { vm.selectScale(modes[it]) }, m)
+                    }
+                    if (stacked) {
+                        family(Modifier.fillMaxWidth())
+                        mode(Modifier.fillMaxWidth())
+                    } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        family(Modifier.weight(1f))
+                        mode(Modifier.weight(1f))
+                    }
+                }
+                ViewMode.Arpeggio, ViewMode.Chord -> Section(if (state.viewMode == ViewMode.Chord) "Chord" else "Arpeggio") {
+                    val offered = state.level.chordIndices()
+                    Picker(
+                        label = "Type",
+                        items = offered.map { Chords.all[it].displayName(state.root) + "  ·  " + Chords.all[it].name },
+                        selected = offered.indexOf(state.chordIndex).coerceAtLeast(0),
+                        onSelect = { vm.selectChord(offered[it]) },
+                        modifier = Modifier.fillMaxWidth(),
+                        header = { i -> Chords.all[offered[i]].group.takeIf { i == 0 || Chords.all[offered[i - 1]].group != it } },
+                    )
+                }
+                ViewMode.Song -> {}
+            }
+        }
+        val tuning = @Composable {
+            Section("Tuning") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Picker(
+                        label = if (state.capo > 0) "Capo ${state.capo}" else "Strings",
+                        items = Tunings.all.map { "${it.name}  ${it.stringNames.joinToString(" ")}" } +
+                            listOfNotNull(state.customTuning?.let { "Custom  ${it.stringNames.joinToString(" ")}" }),
+                        selected = if (state.customTuning != null) Tunings.all.size else state.tuningIndex,
+                        onSelect = { if (it < Tunings.all.size) vm.selectTuning(it) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedButton(onClick = { showTuningEditor = true }, modifier = Modifier.height(56.dp), shape = MaterialTheme.shapes.medium) { Text("Edit") }
+                }
+            }
+        }
+        val labels = @Composable {
+            Section("Labels") {
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    LabelMode.entries.forEachIndexed { i, m ->
+                        SegmentedButton(
+                            selected = state.labelMode == m,
+                            onClick = { vm.setLabelMode(m) },
+                            shape = SegmentedButtonDefaults.itemShape(i, LabelMode.entries.size),
+                            icon = {},
+                            label = { Text(m.name, style = MaterialTheme.typography.labelMedium) },
+                        )
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Playing-order numbers", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Switch(checked = state.showOrder, onCheckedChange = vm::setShowOrder)
+                }
+            }
+        }
+        val range = @Composable { NeckRange(state, vm) }
+        val header = @Composable { wide: Boolean ->
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    state.title,
+                    style = if (wide) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
                 )
-                OutlinedButton(onClick = { showTuningEditor = true }) { Text("Edit") }
-            }
-
-            Text(
-                state.title,
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            if (state.cagedEnabled) CagedRow(state, vm)
-            if (isSong) SongHeader(state)
-            state.highlights?.let { h ->
-                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Marked: ${h.label ?: "${h.positions.size} notes"}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.background(HighlightPink, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 4.dp),
-                    )
-                    TextButton(onClick = { vm.highlight(null) }) { Text("Clear") }
+                if (isSong) SongHeader(state)
+                state.highlights?.let { h ->
+                    StatusPill("Marked: ${h.label ?: "${h.positions.size} notes"}", HighlightPink) { vm.highlight(null) }
                 }
-            }
-            state.overlay?.takeIf { !(isSong && state.song == null) }?.let { o ->
-                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Overlay: ${o.root.name} ${o.name}", style = MaterialTheme.typography.labelLarge)
-                    TextButton(onClick = vm::clearOverlay) { Text("Clear") }
+                state.overlay?.takeIf { !(isSong && state.song == null) }?.let { o ->
+                    StatusPill("Overlay: ${o.root.name} ${o.name}", MaterialTheme.colorScheme.primary, onClear = vm::clearOverlay)
                 }
-            }
-
-            val strip = rememberScrollState()
-            Row(
-                Modifier
-                    .horizontalScroll(strip)
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                val chips = if (isSong) music.legend.map { Triple(it.note, it.interval, Color(it.color)) }
-                else state.intervals.zip(notes).map { (iv, note) -> Triple(note.name, iv.label, degreeColor(iv)) }
-                chips.forEach { (name, label, color) ->
-                    Column(
-                        Modifier
-                            .background(color, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(name, color = Color.White, fontWeight = FontWeight.Bold)
-                        Text(label, color = Color.White, style = MaterialTheme.typography.labelSmall)
-                    }
+                val strip = rememberScrollState()
+                Row(Modifier.horizontalScroll(strip), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val chips = if (isSong) music.legend.map { Triple(it.note, it.interval, Color(it.color)) }
+                    else state.intervals.zip(notes).map { (iv, note) -> Triple(note.name, iv.label, degreeColor(iv)) }
+                    chips.forEach { (name, label, color) -> NoteChip(name, label, color) }
                 }
+                scrollbars?.Horizontal(strip, Modifier.fillMaxWidth())
             }
-            scrollbars?.Horizontal(strip, Modifier.fillMaxWidth().padding(horizontal = 16.dp))
-
-            Row(
-                Modifier.padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Display.entries.forEach { display ->
-                    FilterChip(
-                        selected = state.display == display,
-                        onClick = { vm.setDisplay(display) },
-                        label = { Text(display.name) },
+        }
+        val display = @Composable {
+            SingleChoiceSegmentedButtonRow {
+                Display.entries.forEachIndexed { i, d ->
+                    SegmentedButton(
+                        selected = state.display == d,
+                        onClick = { vm.setDisplay(d) },
+                        shape = SegmentedButtonDefaults.itemShape(i, Display.entries.size),
+                        icon = {},
+                        label = { Text(d.name, style = MaterialTheme.typography.labelMedium) },
                     )
                 }
-                Spacer(Modifier.weight(1f))
-                SaveButton(state.display, enabled = saver != null, onPdf = ::savePdf, onMidi = ::saveMidi)
             }
-
+        }
+        val cagedChips = @Composable { if (state.cagedEnabled) CagedRow(state, vm) }
+        val board = @Composable {
             if (state.display != Display.Fretboard) {
                 val accent = MaterialTheme.colorScheme.primary
                 Notation(
@@ -388,31 +378,37 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                         }
                     },
                 )
-            } else Fretboard(
-                tuning = state.tuning,
-                fretCount = state.fretCount,
-                leftHanded = state.leftHanded,
-                dots = boardDots,
-                frets = state.fretRange,
-                strings = state.stringRange,
-                muted = boardMuted,
+            } else Surface(
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth(),
-                sounding = sounding,
-                marked = state.highlights?.positions.orEmpty(),
-                regions = state.cagedPositions.mapIndexed { i, p ->
-                    Region(p.shape.name, p.frets, cagedColor(p.shape.name), selected = i == state.cagedPick)
-                },
-                outlined = if (voicing == null) cagedShape?.frets?.withIndex()?.mapNotNull { (str, f) -> f?.let { Position(str, it) } }?.toSet().orEmpty() else emptySet(),
-                onTap = { p ->
-                    // A tapped note cuts off whatever was playing, so stop its ringing too.
-                    if (playback.playing) vm.stopPlayback()
-                    player?.playNote(state.tuning.midi[p.string] + p.fret)
-                    vm.follow(listOf(setOf(p)), step = 0.6)
-                },
-            )
-
-            RangeControls(state, vm)
-
+            ) {
+                Fretboard(
+                    tuning = state.tuning,
+                    fretCount = state.fretCount,
+                    leftHanded = state.leftHanded,
+                    dots = boardDots,
+                    frets = state.fretRange,
+                    strings = state.stringRange,
+                    muted = boardMuted,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    sounding = sounding,
+                    marked = state.highlights?.positions.orEmpty(),
+                    regions = state.cagedPositions.mapIndexed { i, p ->
+                        Region(p.shape.name, p.frets, cagedColor(p.shape.name), selected = i == state.cagedPick)
+                    },
+                    outlined = if (voicing == null) cagedShape?.frets?.withIndex()?.mapNotNull { (str, f) -> f?.let { Position(str, it) } }?.toSet().orEmpty() else emptySet(),
+                    onTap = { p ->
+                        // A tapped note cuts off whatever was playing, so stop its ringing too.
+                        if (playback.playing) vm.stopPlayback()
+                        player?.playNote(state.tuning.midi[p.string] + p.fret)
+                        vm.follow(listOf(setOf(p)), step = 0.6)
+                    },
+                )
+            }
+        }
+        val below = @Composable {
             when (state.viewMode) {
                 ViewMode.Chord -> if (caged != null) VoicingBar(
                     text = "CAGED ${caged.shape} shape  ·  frets ${caged.frets.first}–${caged.frets.last}" +
@@ -423,7 +419,7 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                     text = when {
                         voicings.isEmpty() -> "No playable shapes found"
                         voicing == null -> "All chord tones · ${voicings.size} shapes"
-                        else -> "Shape ${state.voicingIndex + 1}/${voicings.size}  ·  ${voicing.tab}"
+                        else -> "Shape ${state.voicingIndex + 1} of ${voicings.size}  ·  ${voicing.tab}"
                     },
                     enabled = voicings.isNotEmpty(),
                     onStep = vm::stepVoicing,
@@ -437,7 +433,58 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                 }
             }
         }
-        scrollbars?.Vertical(page, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+
+        BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
+            if (maxWidth >= 840.dp) {
+                // Desktop and tablets: a quiet, fixed-width sidebar of controls; the neck is the stage.
+                Row(Modifier.fillMaxSize()) {
+                    val side = rememberScrollState()
+                    Box(Modifier.width(340.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+                        Column(
+                            Modifier.fillMaxSize().verticalScroll(side).padding(horizontal = 20.dp, vertical = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(22.dp),
+                        ) {
+                            level(); view(); key(false); choice(true); tuning(); range(); labels()
+                        }
+                        scrollbars?.Vertical(side, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+                    }
+                    VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    val stage = rememberScrollState()
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        Column(
+                            Modifier.fillMaxSize().verticalScroll(stage).padding(horizontal = 28.dp, vertical = 22.dp),
+                            verticalArrangement = Arrangement.spacedBy(18.dp),
+                        ) {
+                            header(true)
+                            Row(verticalAlignment = Alignment.CenterVertically) { display() }
+                            cagedChips()
+                            board()
+                            below()
+                        }
+                        scrollbars?.Vertical(stage, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+                    }
+                }
+            } else {
+                // Phones: one column, the neck high up, transport in the thumb zone below.
+                val page = rememberScrollState()
+                Box(Modifier.fillMaxSize()) {
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(page).padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                    ) {
+                        // The neck within the first screenful; the finer controls follow.
+                        level()
+                        header(false)
+                        board()
+                        display()
+                        view(); key(true); choice(false)
+                        cagedChips()
+                        below()
+                        range(); tuning(); labels()
+                    }
+                    scrollbars?.Vertical(page, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+                }
+            }
         }
     }
 
@@ -453,86 +500,237 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     if (showTuningEditor) TuningEditor(state, vm) { showTuningEditor = false }
 }
 
-/** Fret range (nut → bridge), string range (low → high) and the playing-order toggle. */
+/** A group of controls with a small, quiet heading: spacing does the grouping, not boxes. */
 @Composable
-private fun RangeControls(state: UiState, vm: NeckScapeViewModel) {
-    val frets = state.fretRange
-    val strings = state.stringRange
-    val tuning = state.tuning
-    // Guitarists number strings from the highest-pitched one, which is index strings-1.
-    fun stringLabel(s: Int) = "${tuning.strings - s} (${tuning.stringNames[s]})"
-
-    Column(Modifier.padding(horizontal = 16.dp)) {
-        Text("Frets ${frets.first}–${frets.last}", style = MaterialTheme.typography.labelLarge)
-        RangeSlider(
-            value = frets.first.toFloat()..frets.last.toFloat(),
-            onValueChange = { vm.setFretRange(it.start.roundToInt(), it.endInclusive.roundToInt()) },
-            valueRange = 0f..state.fretCount.toFloat(),
-            steps = state.fretCount - 1,
-        )
+private fun Section(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            "Strings ${stringLabel(strings.first)} to ${stringLabel(strings.last)}",
-            style = MaterialTheme.typography.labelLarge,
+            title.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        RangeSlider(
-            value = strings.first.toFloat()..strings.last.toFloat(),
-            onValueChange = { vm.setStringRange(it.start.roundToInt(), it.endInclusive.roundToInt()) },
-            valueRange = 0f..(tuning.strings - 1).toFloat(),
-            steps = (tuning.strings - 2).coerceAtLeast(0),
-        )
-        val numbering = @Composable {
-            Text("Order numbers")
-            Spacer(Modifier.width(8.dp))
-            Switch(checked = state.showOrder, onCheckedChange = vm::setShowOrder)
+        content()
+    }
+}
+
+/** Logo and name, then the actions as icons with tooltips. */
+@Composable
+private fun AppTopBar(
+    state: UiState,
+    canOpen: Boolean,
+    canSave: Boolean,
+    onUndo: () -> Unit,
+    onOpen: () -> Unit,
+    onPdf: (Boolean) -> Unit,
+    onMidi: () -> Unit,
+    onSettings: () -> Unit,
+) {
+    TopAppBar(
+        navigationIcon = {
+            LocalLogo.current?.let { Image(it, contentDescription = null, modifier = Modifier.padding(start = 12.dp, end = 4.dp).size(36.dp)) }
+        },
+        title = {
+            BoxWithConstraints {
+                Text(if (maxWidth < 240.dp) "NeckScape" else "NeckScape-Navigator", maxLines = 1, style = MaterialTheme.typography.titleLarge)
+            }
+        },
+        actions = {
+            if (state.undoDepth > 0) ToolIcon("Undo the last change", AppIcons.Undo, onUndo)
+            if (canOpen) ToolIcon("Open a song or tab", AppIcons.Open, onOpen)
+            if (canSave) SaveMenu(state.display, onPdf, onMidi)
+            ToolIcon("Settings", AppIcons.Tune, onSettings)
+            Spacer(Modifier.width(4.dp))
+        },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+    )
+}
+
+@Composable
+private fun ToolIcon(label: String, icon: ImageVector, onClick: () -> Unit) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = { PlainTooltip { Text(label) } },
+        state = rememberTooltipState(),
+    ) {
+        IconButton(onClick = onClick) { Icon(icon, contentDescription = label) }
+    }
+}
+
+/** Save the current view as a PDF (alone, or with neck + score + tab), or as a MIDI file. */
+@Composable
+private fun SaveMenu(display: Display, onPdf: (everything: Boolean) -> Unit, onMidi: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ToolIcon("Save as PDF or MIDI", AppIcons.Save) { open = true }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("PDF: ${display.name.lowercase()} only") }, onClick = { open = false; onPdf(false) })
+            DropdownMenuItem(text = { Text("PDF: fretboard, score and tab") }, onClick = { open = false; onPdf(true) })
+            DropdownMenuItem(text = { Text("MIDI file") }, onClick = { open = false; onMidi() })
         }
-        val tempo = @Composable { modifier: Modifier ->
-            Text("Tempo ♩=${state.tempo}", Modifier.width(110.dp))
-            Slider(
-                value = state.tempo.toFloat(),
-                onValueChange = { vm.setTempo((it / 5).roundToInt() * 5) },
-                valueRange = MIN_TEMPO.toFloat()..MAX_TEMPO.toFloat(),
-                modifier = modifier,
-            )
-        }
-        val sound = @Composable { SoundPicker(state.instrument, vm::setInstrument) }
-        // One row when there's room (tablet, desktop), more on a phone.
-        BoxWithConstraints {
-            if (maxWidth >= 760.dp) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    numbering()
-                    Spacer(Modifier.width(24.dp))
-                    tempo(Modifier.weight(1f))
-                    Spacer(Modifier.width(16.dp))
-                    sound()
+    }
+}
+
+/** Always in reach at the bottom: a big Play/Stop, the tempo and the sound. */
+@Composable
+private fun TransportBar(state: UiState, vm: NeckScapeViewModel, playing: Boolean, enabled: Boolean, onPlay: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
+        BoxWithConstraints(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)) {
+            val compact = maxWidth < 600.dp
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                FilledIconButton(
+                    onClick = onPlay,
+                    enabled = enabled,
+                    modifier = Modifier.size(56.dp),
+                    shape = CircleShape,
+                ) {
+                    Icon(if (playing) AppIcons.Stop else AppIcons.Play, contentDescription = if (playing) "Stop" else "Play", Modifier.size(30.dp))
                 }
-            } else {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        numbering()
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("Tempo", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.weight(1f))
-                        sound()
+                        Text("♩ = ${state.tempo}", style = MaterialTheme.typography.labelLarge)
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) { tempo(Modifier.weight(1f)) }
+                    Slider(
+                        value = state.tempo.toFloat(),
+                        onValueChange = { vm.setTempo((it / 5).roundToInt() * 5) },
+                        valueRange = MIN_TEMPO.toFloat()..MAX_TEMPO.toFloat(),
+                        modifier = Modifier.height(32.dp),
+                    )
                 }
+                SoundPicker(state.instrument, compact, vm::setInstrument)
             }
         }
     }
 }
 
-/** The playback sound: acoustic, classical, electric, piano or synth. */
+/** The playback sound, as a labelled button (or just the icon on a phone). */
 @Composable
-private fun SoundPicker(current: Instrument, onPick: (Instrument) -> Unit) {
+private fun SoundPicker(current: Instrument, compact: Boolean, onPick: (Instrument) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { open = true }) { Text("Sound: ${current.label}", maxLines = 1) }
+        if (compact) {
+            FilledTonalIconButton(onClick = { open = true }, modifier = Modifier.size(48.dp)) {
+                Icon(AppIcons.Speaker, contentDescription = "Sound: ${current.label}")
+            }
+        } else {
+            FilledTonalButton(onClick = { open = true }, shape = MaterialTheme.shapes.medium, modifier = Modifier.height(48.dp)) {
+                Icon(AppIcons.Speaker, contentDescription = null, Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(current.label, maxLines = 1)
+                Spacer(Modifier.width(4.dp))
+                Icon(AppIcons.ChevronDown, contentDescription = null, Modifier.size(18.dp))
+            }
+        }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            Text("Sound", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp))
             Instrument.entries.forEach { i ->
                 DropdownMenuItem(
-                    text = { Text(i.label, fontWeight = if (i == current) FontWeight.Bold else null) },
+                    text = { Text(i.label, fontWeight = if (i == current) FontWeight.SemiBold else null) },
                     onClick = { open = false; onPick(i) },
                 )
             }
         }
+    }
+}
+
+/** The twelve keys: a 4 × 3 grid in the sidebar, a scrolling row on a phone. */
+@Composable
+private fun RootPicker(selected: Int, compact: Boolean, onSelect: (Int) -> Unit) {
+    val chip = @Composable { pc: Int, modifier: Modifier ->
+        val on = pc == selected
+        Surface(
+            onClick = { onSelect(pc) },
+            shape = MaterialTheme.shapes.small,
+            color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            modifier = modifier.height(44.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(ROOT_LABELS[pc], style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            }
+        }
+    }
+    if (compact) {
+        val row = rememberLazyListState()
+        Column {
+            LazyRow(state = row, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(12) { pc -> chip(pc, Modifier.width(if (ROOT_LABELS[pc].length > 2) 72.dp else 52.dp)) }
+            }
+            LocalScrollbars.current?.HorizontalLazy(row, Modifier.fillMaxWidth())
+        }
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (rowStart in 0 until 12 step 4) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (pc in rowStart until rowStart + 4) chip(pc, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** A note of what's showing: name over interval, in its degree colour. */
+@Composable
+private fun NoteChip(name: String, interval: String, color: Color) {
+    Column(
+        Modifier.background(color, MaterialTheme.shapes.small).padding(horizontal = 12.dp, vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(name, color = Color.White, style = MaterialTheme.typography.labelLarge)
+        Text(interval, color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+/** A coloured "marked" / "overlay" line with a clear button. */
+@Composable
+private fun StatusPill(text: String, color: Color, onClear: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.background(color, RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 5.dp),
+        )
+        IconButton(onClick = onClear, modifier = Modifier.size(36.dp)) { Icon(AppIcons.Close, contentDescription = "Clear", Modifier.size(18.dp)) }
+    }
+}
+
+/** Fret range (nut → bridge) and string range (low → high). */
+@Composable
+private fun NeckRange(state: UiState, vm: NeckScapeViewModel) {
+    val frets = state.fretRange
+    val strings = state.stringRange
+    val tuning = state.tuning
+    // Guitarists number strings from the highest-pitched one, which is index strings-1.
+    fun stringLabel(s: Int) = "${tuning.strings - s} (${tuning.stringNames[s]})"
+    Section("Neck range") {
+        Column {
+            LabelledValue("Frets", "${frets.first}–${frets.last}")
+            RangeSlider(
+                value = frets.first.toFloat()..frets.last.toFloat(),
+                onValueChange = { vm.setFretRange(it.start.roundToInt(), it.endInclusive.roundToInt()) },
+                valueRange = 0f..state.fretCount.toFloat(),
+                steps = state.fretCount - 1,
+            )
+            LabelledValue("Strings", "${stringLabel(strings.first)} to ${stringLabel(strings.last)}")
+            RangeSlider(
+                value = strings.first.toFloat()..strings.last.toFloat(),
+                onValueChange = { vm.setStringRange(it.start.roundToInt(), it.endInclusive.roundToInt()) },
+                valueRange = 0f..(tuning.strings - 1).toFloat(),
+                steps = (tuning.strings - 2).coerceAtLeast(0),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LabelledValue(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -571,16 +769,15 @@ private fun TuningEditor(state: UiState, vm: NeckScapeViewModel, onDismiss: () -
     )
 }
 
+/** ‹ text › in a soft pill: stepping through shapes. */
 @Composable
 private fun VoicingBar(text: String, enabled: Boolean, onStep: (Int) -> Unit) {
-    Row(
-        Modifier.padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        OutlinedButton(onClick = { onStep(-1) }, enabled = enabled) { Text("‹") }
-        Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        OutlinedButton(onClick = { onStep(1) }, enabled = enabled) { Text("›") }
+    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { onStep(-1) }, enabled = enabled) { Icon(AppIcons.ChevronLeft, contentDescription = "Previous") }
+            Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+            IconButton(onClick = { onStep(1) }, enabled = enabled) { Icon(AppIcons.ChevronRight, contentDescription = "Next") }
+        }
     }
 }
 
@@ -588,12 +785,14 @@ private fun VoicingBar(text: String, enabled: Boolean, onStep: (Int) -> Unit) {
 private fun DiatonicChords(state: UiState, vm: NeckScapeViewModel) {
     val chords = diatonicChords(state.scale, state.root, state.sevenths)
     if (chords.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(
-            Modifier.padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Chords in this mode", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "CHORDS IN THIS KEY",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
             if (state.level != Level.Beginner) {
                 Text("7ths", style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.width(8.dp))
@@ -601,33 +800,45 @@ private fun DiatonicChords(state: UiState, vm: NeckScapeViewModel) {
             }
         }
         val row = rememberLazyListState()
-        LazyRow(
-            state = row,
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
+        LazyRow(state = row, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(chords) { degree, chord ->
-                AssistChip(
-                    enabled = chord.type != null && state.level.allows(chord.type),
+                val usable = chord.type != null && state.level.allows(chord.type)
+                Surface(
                     onClick = { chord.type?.let { vm.openChord(degree, chord.root, it) } },
-                    label = { Text("${chord.numeral}  ${chord.type?.displayName(chord.root) ?: "?"}") },
-                )
+                    enabled = usable,
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.height(52.dp),
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(chord.numeral, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            chord.type?.displayName(chord.root) ?: "?",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (usable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        )
+                    }
+                }
             }
         }
-        LocalScrollbars.current?.HorizontalLazy(row, Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+        LocalScrollbars.current?.HorizontalLazy(row, Modifier.fillMaxWidth())
     }
 }
 
 /** The score or tab of what's selected, on white paper, as wide as the screen allows. */
 @Composable
 private fun Notation(music: Music, staves: Staves, highlight: (Tag) -> Color?) {
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
         val width = maxWidth.value
         val sheet = remember(music, staves, width) {
             val margin = 12f
             stack(width, Engraver(music, screenStaffSpace(width)).blocks(staves, width - 2 * margin), gap = 10f, margin = margin)
         }
-        Box(Modifier.background(Color.White, RoundedCornerShape(8.dp))) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = Color.White,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
             if (sheet.items.isEmpty()) {
                 Text("Nothing to show — no notes in the selected frets and strings.", Modifier.padding(16.dp), color = Color.DarkGray)
             } else {
@@ -641,36 +852,23 @@ private fun Notation(music: Music, staves: Staves, highlight: (Tag) -> Color?) {
 @Composable
 private fun CagedRow(state: UiState, vm: NeckScapeViewModel) {
     FlowRow(
-        Modifier.padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("CAGED", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = 4.dp))
-        FilterChip(selected = state.cagedPick < 0, onClick = { vm.setCaged(-1) }, label = { Text("All") })
+        Text("CAGED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 6.dp))
+        FilterChip(selected = state.cagedPick < 0, onClick = { vm.setCaged(-1) }, label = { Text("All") }, shape = MaterialTheme.shapes.small)
         state.cagedPositions.forEachIndexed { i, p ->
             FilterChip(
                 selected = state.cagedPick == i,
                 onClick = { vm.setCaged(i) },
+                shape = MaterialTheme.shapes.small,
+                leadingIcon = { Box(Modifier.size(10.dp).background(cagedColor(p.shape.name), CircleShape)) },
                 label = {
-                    Text(p.shape.name, color = cagedColor(p.shape.name), fontWeight = FontWeight.Bold)
+                    Text(p.shape.name, fontWeight = FontWeight.SemiBold)
                     Text("  ${p.frets.first}–${p.frets.last}", style = MaterialTheme.typography.labelSmall)
                 },
             )
-        }
-    }
-}
-
-/** Save the current view as a PDF (alone, or with neck + score + tab), or as a MIDI file. */
-@Composable
-private fun SaveButton(display: Display, enabled: Boolean, onPdf: (everything: Boolean) -> Unit, onMidi: () -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        OutlinedButton(onClick = { open = true }, enabled = enabled) { Text("Save") }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("PDF: ${display.name.lowercase()} only") }, onClick = { open = false; onPdf(false) })
-            DropdownMenuItem(text = { Text("PDF: fretboard, score and tab") }, onClick = { open = false; onPdf(true) })
-            DropdownMenuItem(text = { Text("MIDI file") }, onClick = { open = false; onMidi() })
         }
     }
 }
@@ -744,7 +942,7 @@ private fun BridgeSettings(bridge: BridgeServer) {
     }
 }
 
-/** A labelled button that opens a menu; [header] can insert a group title before an item. */
+/** A labelled field that opens a menu; [header] can insert a group title before an item. */
 @Composable
 private fun Picker(
     label: String,
@@ -756,24 +954,32 @@ private fun Picker(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier) {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.fillMaxWidth()) {
-                Text(label, style = MaterialTheme.typography.labelSmall)
-                Text(items[selected], maxLines = 1)
+        Surface(
+            onClick = { expanded = true },
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+        ) {
+            Row(Modifier.padding(start = 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(items[selected], maxLines = 1, style = MaterialTheme.typography.bodyLarge)
+                }
+                Icon(AppIcons.ChevronDown, contentDescription = null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             items.forEachIndexed { i, item ->
                 header(i)?.let {
                     Text(
-                        it,
-                        style = MaterialTheme.typography.labelMedium,
+                        it.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 4.dp),
+                        modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 4.dp),
                     )
                 }
                 DropdownMenuItem(
-                    text = { Text(item, fontWeight = if (i == selected) FontWeight.Bold else null) },
+                    text = { Text(item, fontWeight = if (i == selected) FontWeight.SemiBold else null) },
                     onClick = {
                         onSelect(i)
                         expanded = false

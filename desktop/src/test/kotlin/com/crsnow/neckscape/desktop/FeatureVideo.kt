@@ -58,6 +58,7 @@ import com.crsnow.neckscape.ui.AiTools
 import com.crsnow.neckscape.ui.AudioOutput
 import com.crsnow.neckscape.ui.Display
 import com.crsnow.neckscape.ui.NeckScapeScreen
+import com.crsnow.neckscape.ui.NeckScapeTheme
 import com.crsnow.neckscape.ui.NeckScapeViewModel
 import com.crsnow.neckscape.ui.LabelMode
 import com.crsnow.neckscape.ui.LocalNotePlayer
@@ -124,7 +125,7 @@ class FeatureVideo {
 
         val scene = ImageComposeScene(width, height, Density(density)) {
             CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalNotePlayer provides silent) {
-                MaterialTheme(lightColorScheme()) {
+                NeckScapeTheme(dark = true, fontFamily = InterFamily, logo = LogoPainter) {
                     Box(Modifier.fillMaxSize()) {
                         Row(Modifier.fillMaxSize()) {
                             Box(Modifier.width((appWidth / density).dp).fillMaxHeight()) {
@@ -406,7 +407,7 @@ class FeatureVideo {
             vm.setTempo(70)
             say(Caption(
                 "Set the tempo",
-                "The Tempo slider, under the fretboard, sets the playback speed.\n\nSlow — ♩ = 70 — for working out the fingering …",
+                "The Tempo slider, in the bar along the bottom, sets the playback speed.\n\nSlow — ♩ = 70 — for working out the fingering …",
                 step = nextStep(),
                 listening = true,
             ))
@@ -414,7 +415,7 @@ class FeatureVideo {
             playScale(limit = 7)
             narrate("tempo_drag")
             say(caption.value.copy(
-                body = "The Tempo slider, under the fretboard, sets the playback speed.\n\n… then drag it up as the student gets it under the fingers.",
+                body = "The Tempo slider, in the bar along the bottom, sets the playback speed.\n\n… then drag it up as the student gets it under the fingers.",
                 listening = false,
             ))
             for (bpm in 80..200 step 10) {
@@ -423,7 +424,7 @@ class FeatureVideo {
             }
             narrate("tempo_fast")
             say(caption.value.copy(
-                body = "The Tempo slider, under the fretboard, sets the playback speed.\n\nUp to speed — ♩ = 200. Anywhere from 40 to 240 BPM.",
+                body = "The Tempo slider, in the bar along the bottom, sets the playback speed.\n\nUp to speed — ♩ = 200. Anywhere from 40 to 240 BPM.",
                 listening = true,
             ))
             hold(1.5)

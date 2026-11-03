@@ -11,6 +11,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.ViewModelProvider
 import com.crsnow.neckscape.bridge.BridgeServer
 import com.crsnow.neckscape.bridge.SettingsStore
@@ -23,6 +27,7 @@ import com.crsnow.neckscape.ui.LocalFileOpener
 import com.crsnow.neckscape.ui.LocalFileSaver
 import com.crsnow.neckscape.ui.LocalNotePlayer
 import com.crsnow.neckscape.ui.NeckScapeScreen
+import com.crsnow.neckscape.ui.NeckScapeTheme
 import com.crsnow.neckscape.ui.NeckScapeViewModel
 import com.crsnow.neckscape.ui.NotePlayer
 import java.security.MessageDigest
@@ -81,7 +86,7 @@ class MainActivity : ComponentActivity() {
         }.also { bridge = it }
         b.start()
         setContent {
-            NeckScapeTheme {
+            NeckScapeTheme(fontFamily = Inter, logo = painterResource(R.mipmap.ic_launcher_foreground)) {
                 CompositionLocalProvider(
                     LocalNotePlayer provides player,
                     LocalFileSaver provides saver,
@@ -160,6 +165,13 @@ private fun readAtMost(input: java.io.InputStream, limit: Int): ByteArray {
     }
     return out.toByteArray()
 }
+
+private val Inter = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold),
+)
 
 /** Bridge settings (token, LAN mode) in private shared preferences. */
 private class PrefsSettings(context: Context) : SettingsStore {

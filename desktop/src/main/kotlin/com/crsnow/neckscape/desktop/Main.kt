@@ -1,9 +1,5 @@
 package com.crsnow.neckscape.desktop
 
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.flow.distinctUntilChangedBy
@@ -26,6 +22,7 @@ import com.crsnow.neckscape.ui.LocalBridge
 import com.crsnow.neckscape.ui.LocalFileOpener
 import com.crsnow.neckscape.ui.LocalScrollbars
 import com.crsnow.neckscape.ui.NeckScapeScreen
+import com.crsnow.neckscape.ui.NeckScapeTheme
 import com.crsnow.neckscape.ui.FileSaver
 import com.crsnow.neckscape.ui.NeckScapeViewModel
 import com.crsnow.neckscape.ui.LocalFileSaver
@@ -55,7 +52,7 @@ fun main() = application {
         icon = remember { BitmapPainter(ImageIO.read(object {}.javaClass.getResource("/icon.png")).toComposeImageBitmap()) },
         state = rememberWindowState(width = 1280.dp, height = 900.dp),
     ) {
-        MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
+        NeckScapeTheme(fontFamily = InterFamily, logo = LogoPainter) {
             val saver = remember(window) { FileSaver { name, _, bytes -> saveAndOpen(window, name, bytes) } }
             val opener = remember(window) { FileOpener { onFile -> pickFile(window)?.let { onFile(it.name, it.readBytes()) } } }
             CompositionLocalProvider(

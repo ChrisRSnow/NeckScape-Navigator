@@ -22,6 +22,9 @@ kotlin {
         kotlin.srcDir("../app/src/main/kotlin/com/crsnow/neckscape/notation")
         kotlin.srcDir("../app/src/main/kotlin/com/crsnow/neckscape/song")
         kotlin.srcDir("../app/src/main/kotlin/com/crsnow/neckscape/bridge")
+        // Inter and the logo layer come from the Android resources, so there's one copy.
+        resources.srcDir("../app/src/main/res/font")
+        resources.srcDir("../app/src/main/res/mipmap-xxxhdpi")
     }
 }
 

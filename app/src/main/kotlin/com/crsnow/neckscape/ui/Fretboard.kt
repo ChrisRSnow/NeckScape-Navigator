@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -41,12 +42,17 @@ import kotlin.math.roundToInt
 /** What to draw on every fret position sounding a given pitch class. */
 data class NoteMark(val label: String, val color: Color)
 
-private val Board = Color(0xFF3E2723)
-private val FretWire = Color(0xFFB0BEC5)
-private val Nut = Color(0xFFEFEBE9)
-private val StringColor = Color(0xFFD7CCC8)
-private val Inlay = Color(0xFF8D6E63)
-private val Shade = Color.Black.copy(alpha = 0.45f)
+// Rosewood, nickel frets, a bone nut, pearl inlays and wound/plain strings.
+private val BoardDark = Color(0xFF24160F)
+private val BoardMid = Color(0xFF3A2418)
+private val FretShadow = Color(0xFF6E777C)
+private val FretShine = Color(0xFFE9EEF0)
+private val Nut = Color(0xFFEDE5D3)
+private val StringColor = Color(0xFFD9D3C7)
+private val WoundString = Color(0xFFC9B48A)
+private val PearlLight = Color(0xFFF4F0E6)
+private val PearlDark = Color(0xFFC8BFAE)
+private val Shade = Color(0xFF05080A).copy(alpha = 0.58f)
 private val BadgeText = Color(0xFF212121)
 private val Unmarked = Color(0xFF9E9E9E)
 
@@ -171,24 +177,35 @@ fun Fretboard(
             val boardTop = stringY(tuning.strings - 1) - STRING_GAP.toPx() / 2
             val boardBottom = stringY(0) + STRING_GAP.toPx() / 2
 
-            // Wood, inlays, frets, nut.
+            // Wood (a soft gradient across the neck), pearl inlays, nickel frets, a bone nut.
             val left = minOf(x(wirePx[0]), x(wirePx[fretCount]))
-            drawRect(Board, Offset(left, boardTop), Size(wirePx[fretCount] - wirePx[0], boardBottom - boardTop))
+            val boardSize = Size(wirePx[fretCount] - wirePx[0], boardBottom - boardTop)
+            drawRoundRect(
+                Brush.verticalGradient(listOf(BoardDark, BoardMid, BoardDark), startY = boardTop, endY = boardBottom),
+                Offset(left, boardTop), boardSize, CornerRadius(4.dp.toPx()),
+            )
             val midY = (boardTop + boardBottom) / 2
+            fun pearl(center: Offset) {
+                val r = 6.dp.toPx()
+                drawCircle(Brush.radialGradient(listOf(PearlLight, PearlDark), center = center - Offset(r / 3, r / 3), radius = r * 1.4f), r, center)
+            }
             for (f in 1..fretCount) {
                 val cx = x(fretCenter(f))
                 when (f) {
-                    in SINGLE_INLAYS -> drawCircle(Inlay, 6.dp.toPx(), Offset(cx, midY))
+                    in SINGLE_INLAYS -> pearl(Offset(cx, midY))
                     in DOUBLE_INLAYS -> {
                         val off = STRING_GAP.toPx()
-                        drawCircle(Inlay, 6.dp.toPx(), Offset(cx, midY - off))
-                        drawCircle(Inlay, 6.dp.toPx(), Offset(cx, midY + off))
+                        pearl(Offset(cx, midY - off))
+                        pearl(Offset(cx, midY + off))
                     }
                 }
-                drawLine(FretWire, Offset(x(wirePx[f]), boardTop), Offset(x(wirePx[f]), boardBottom), 2.dp.toPx())
+                // A fret wire: dark edge, bright crown.
+                val wx = x(wirePx[f])
+                drawLine(FretShadow, Offset(wx, boardTop), Offset(wx, boardBottom), 3.dp.toPx())
+                drawLine(FretShine, Offset(wx - 0.5f.dp.toPx(), boardTop), Offset(wx - 0.5f.dp.toPx(), boardBottom), 1.2f.dp.toPx())
                 label(measurer, "$f", Offset(cx, boardBottom + NUMBER_ROW.toPx() / 2), numberColor, 11f)
             }
-            drawLine(Nut, Offset(x(wirePx[0]), boardTop), Offset(x(wirePx[0]), boardBottom), 6.dp.toPx())
+            drawLine(Nut, Offset(x(wirePx[0]), boardTop), Offset(x(wirePx[0]), boardBottom), 7.dp.toPx())
 
             // Shade the frets outside the selected range (fret 1 starts at the nut).
             val shadeFrom = if (frets.first == 0) 0 else frets.first - 1
@@ -199,11 +216,13 @@ fun Fretboard(
                 drawRect(Shade, Offset(minOf(a, b), boardTop), Size(Math.abs(b - a), boardBottom - boardTop))
             }
 
-            // Strings, thicker towards the bass; unselected ones fade.
+            // Strings, thicker towards the bass (the lower half wound, bronze-ish), with a faint shadow; unselected ones fade.
             for (s in 0 until tuning.strings) {
                 val y = stringY(s)
                 val thickness = (1f + (tuning.strings - 1 - s) * 0.35f).dp.toPx()
-                val color = if (s in strings) StringColor else StringColor.copy(alpha = 0.3f)
+                val base = if (s < tuning.strings / 2) WoundString else StringColor
+                val color = if (s in strings) base else base.copy(alpha = 0.3f)
+                drawLine(Color.Black.copy(alpha = 0.35f), Offset(x(0f), y + 1.5f.dp.toPx()), Offset(x(wirePx[fretCount]), y + 1.5f.dp.toPx()), thickness)
                 drawLine(color, Offset(x(0f), y), Offset(x(wirePx[fretCount]), y), thickness)
                 if (s in muted) label(measurer, "×", Offset(x(fretCenter(0)), y), numberColor, 16f)
             }
@@ -230,7 +249,10 @@ fun Fretboard(
                     drawCircle(dot.mark.color.copy(alpha = if (dot.emphasis) 0.6f else 0.25f), radius * if (dot.emphasis) 0.7f else 0.55f, center)
                     continue
                 }
+                // A soft drop shadow and a fine light rim lift the marker off the wood.
+                drawCircle(Color.Black.copy(alpha = 0.4f), radius, center + Offset(0f, 1.5f.dp.toPx()))
                 drawCircle(dot.mark.color, radius, center)
+                drawCircle(Color.White.copy(alpha = 0.55f), radius - 0.75f.dp.toPx(), center, style = Stroke(1.5f.dp.toPx()))
                 label(measurer, dot.mark.label, center, Color.White, 11f, bold = true)
                 dot.step?.let { step ->
                     val at = center + Offset(radius * 0.8f, -radius * 0.8f)
