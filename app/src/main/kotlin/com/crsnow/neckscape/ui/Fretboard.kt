@@ -143,14 +143,19 @@ fun Fretboard(
     regions: List<Region> = emptyList(),
     /** A chord shape inside the notes (the CAGED shape): a dark ring. */
     outlined: Set<Position> = emptySet(),
+    /** Tighter string spacing, for short screens (phones in landscape). */
+    compact: Boolean = false,
     onTap: (Position) -> Unit = {},
 ) {
     val measurer = rememberTextMeasurer()
     val currentOnTap by rememberUpdatedState(onTap)
     val numberColor = MaterialTheme.colorScheme.onSurfaceVariant
     val width = OPEN_AREA + (1..fretCount).fold(0.dp) { acc, f -> acc + fretWidth(f) } + 8.dp
-    val top = EDGE + if (regions.isNotEmpty()) REGION_STRIP else 0.dp
-    val height = top + EDGE + STRING_GAP * (tuning.strings - 1) + NUMBER_ROW
+    val gap = if (compact) 27.dp else STRING_GAP
+    val edge = if (compact) 16.dp else EDGE
+    val numbers = if (compact) 18.dp else NUMBER_ROW
+    val top = edge + if (regions.isNotEmpty()) REGION_STRIP else 0.dp
+    val height = top + edge + gap * (tuning.strings - 1) + numbers
 
     val scroll = rememberScrollState()
     Column(modifier) {
@@ -158,12 +163,12 @@ fun Fretboard(
         Canvas(
             Modifier
                 .size(width, height)
-                .pointerInput(tuning, fretCount, leftHanded, top) {
+                .pointerInput(tuning, fretCount, leftHanded, top, gap) {
                     detectTapGestures { tap ->
                         val wirePx = wirePositions(fretCount)
                         val px = if (leftHanded) size.width - tap.x else tap.x
                         val fret = (0..fretCount).firstOrNull { px < wirePx[it] } ?: fretCount
-                        val fromTop = ((tap.y - top.toPx()) / STRING_GAP.toPx()).roundToInt()
+                        val fromTop = ((tap.y - top.toPx()) / gap.toPx()).roundToInt()
                         val string = tuning.strings - 1 - fromTop
                         if (string in 0 until tuning.strings) currentOnTap(Position(string, fret))
                     }
@@ -172,10 +177,10 @@ fun Fretboard(
             val wirePx = wirePositions(fretCount)
             fun x(px: Float) = if (leftHanded) size.width - px else px
             fun fretCenter(fret: Int) = if (fret == 0) OPEN_AREA.toPx() / 2 else (wirePx[fret - 1] + wirePx[fret]) / 2
-            fun stringY(string: Int) = top.toPx() + (tuning.strings - 1 - string) * STRING_GAP.toPx()
+            fun stringY(string: Int) = top.toPx() + (tuning.strings - 1 - string) * gap.toPx()
             // Half a string gap of wood beyond the outer strings, so their dots sit on the board.
-            val boardTop = stringY(tuning.strings - 1) - STRING_GAP.toPx() / 2
-            val boardBottom = stringY(0) + STRING_GAP.toPx() / 2
+            val boardTop = stringY(tuning.strings - 1) - gap.toPx() / 2
+            val boardBottom = stringY(0) + gap.toPx() / 2
 
             // Wood (a soft gradient across the neck), pearl inlays, nickel frets, a bone nut.
             val left = minOf(x(wirePx[0]), x(wirePx[fretCount]))
@@ -194,7 +199,7 @@ fun Fretboard(
                 when (f) {
                     in SINGLE_INLAYS -> pearl(Offset(cx, midY))
                     in DOUBLE_INLAYS -> {
-                        val off = STRING_GAP.toPx()
+                        val off = gap.toPx()
                         pearl(Offset(cx, midY - off))
                         pearl(Offset(cx, midY + off))
                     }
@@ -203,7 +208,7 @@ fun Fretboard(
                 val wx = x(wirePx[f])
                 drawLine(FretShadow, Offset(wx, boardTop), Offset(wx, boardBottom), 3.dp.toPx())
                 drawLine(FretShine, Offset(wx - 0.5f.dp.toPx(), boardTop), Offset(wx - 0.5f.dp.toPx(), boardBottom), 1.2f.dp.toPx())
-                label(measurer, "$f", Offset(cx, boardBottom + NUMBER_ROW.toPx() / 2), numberColor, 11f)
+                label(measurer, "$f", Offset(cx, boardBottom + numbers.toPx() / 2), numberColor, 11f)
             }
             drawLine(Nut, Offset(x(wirePx[0]), boardTop), Offset(x(wirePx[0]), boardBottom), 7.dp.toPx())
 
@@ -227,7 +232,7 @@ fun Fretboard(
                 if (s in muted) label(measurer, "×", Offset(x(fretCenter(0)), y), numberColor, 16f)
             }
 
-            val radius = minOf(STRING_GAP.toPx(), fretWidth(fretCount).toPx()) * 0.42f
+            val radius = minOf(gap.toPx(), fretWidth(fretCount).toPx()) * 0.42f
             val lit = dots.filter { !it.faded }.map { it.position }.toSet()
             // What's sounding: a glow and a white ring, under the dots so badges stay readable
             // (plus a plain dot if the spot isn't marked).

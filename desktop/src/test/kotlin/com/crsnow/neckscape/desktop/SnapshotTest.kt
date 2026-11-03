@@ -143,4 +143,10 @@ class SnapshotTest {
             writeWav(File(dir, "run-${instrument.name.lowercase()}.wav"), PluckSynth.render(run, ring = 1.6, instrument = instrument), PluckSynth.SAMPLE_RATE)
         }
     }
+
+    /** OnePlus 8 Pro on its side (905 × 411 dp): two panes, slim bars, the neck in view. */
+    @Test fun phoneLandscape() = snapshot("phone-landscape", 3168, 1440, 3.5f)
+
+    /** A smaller phone on its side (≈ 700 × 390 dp): still two panes, narrower sidebar. */
+    @Test fun smallPhoneLandscape() = snapshot("phone-landscape-small", 1920, 1080, 2.75f)
 }

@@ -5,6 +5,8 @@ package com.crsnow.neckscape.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +41,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -72,9 +75,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.crsnow.neckscape.bridge.BridgeServer
@@ -202,9 +207,16 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     LaunchedEffect(player) { vm.player = player }
     LaunchedEffect(player, state.instrument) { player?.instrument = state.instrument }
 
+    // Phones on their side are wide but short: two panes, slimmer bars.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val short = maxHeight < 480.dp
+    val twoPane = maxWidth >= 840.dp || (maxWidth > maxHeight && maxWidth >= 600.dp)
+    val sidebarWidth = if (maxWidth < 960.dp) 300.dp else 340.dp
     Scaffold(
         topBar = {
             AppTopBar(
+                short = short,
+                display = if (short) ({ DisplaySwitch(state.display, vm::setDisplay) }) else null,
                 state = state,
                 canOpen = opener != null,
                 canSave = saver != null,
@@ -216,7 +228,7 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
             )
         },
         bottomBar = {
-            TransportBar(state, vm, playing = playback.playing, enabled = player != null, onPlay = ::playAll)
+            TransportBar(state, vm, playing = playback.playing, enabled = player != null, short = short, onPlay = ::playAll)
         },
         containerColor = MaterialTheme.colorScheme.surface,
     ) { padding ->
@@ -225,15 +237,19 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
         // ---- Sections, arranged below for a wide window (sidebar + stage) or a phone (one column) ----
         val level = @Composable {
             Section("Level") {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    Level.entries.forEachIndexed { i, l ->
-                        SegmentedButton(
-                            selected = state.level == l,
-                            onClick = { vm.setLevel(l) },
-                            shape = SegmentedButtonDefaults.itemShape(i, Level.entries.size),
-                            icon = {},
-                            label = { Text(l.name, maxLines = 1, style = MaterialTheme.typography.labelMedium) },
-                        )
+                // Labels shrink to fit a narrow sidebar, so "Intermediate" stays whole.
+                BoxWithConstraints {
+                    val style = MaterialTheme.typography.labelMedium
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        Level.entries.forEachIndexed { i, l ->
+                            SegmentedButton(
+                                selected = state.level == l,
+                                onClick = { vm.setLevel(l) },
+                                shape = SegmentedButtonDefaults.itemShape(i, Level.entries.size),
+                                icon = {},
+                                label = { FitText(l.name, style) },
+                            )
+                        }
                     }
                 }
             }
@@ -328,8 +344,8 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
         }
         val range = @Composable { NeckRange(state, vm) }
         val header = @Composable { wide: Boolean ->
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
+            Column(verticalArrangement = Arrangement.spacedBy(if (short) 6.dp else 10.dp)) {
+                if (!short) Text(
                     state.title,
                     style = if (wide) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
                 )
@@ -341,27 +357,19 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                     StatusPill("Overlay: ${o.root.name} ${o.name}", MaterialTheme.colorScheme.primary, onClear = vm::clearOverlay)
                 }
                 val strip = rememberScrollState()
-                Row(Modifier.horizontalScroll(strip), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val chips = if (isSong) music.legend.map { Triple(it.note, it.interval, Color(it.color)) }
-                    else state.intervals.zip(notes).map { (iv, note) -> Triple(note.name, iv.label, degreeColor(iv)) }
-                    chips.forEach { (name, label, color) -> NoteChip(name, label, color) }
+                // Short screens: the title and notes share a row (the display switch is in the top bar), leaving height for the neck.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (short) Text(state.title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Row(Modifier.weight(1f).horizontalScroll(strip), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val chips = if (isSong) music.legend.map { Triple(it.note, it.interval, Color(it.color)) }
+                        else state.intervals.zip(notes).map { (iv, note) -> Triple(note.name, iv.label, degreeColor(iv)) }
+                        chips.forEach { (name, label, color) -> NoteChip(name, label, color) }
+                    }
                 }
                 scrollbars?.Horizontal(strip, Modifier.fillMaxWidth())
             }
         }
-        val display = @Composable {
-            SingleChoiceSegmentedButtonRow {
-                Display.entries.forEachIndexed { i, d ->
-                    SegmentedButton(
-                        selected = state.display == d,
-                        onClick = { vm.setDisplay(d) },
-                        shape = SegmentedButtonDefaults.itemShape(i, Display.entries.size),
-                        icon = {},
-                        label = { Text(d.name, style = MaterialTheme.typography.labelMedium) },
-                    )
-                }
-            }
-        }
+        val display = @Composable { if (!short) DisplaySwitch(state.display, vm::setDisplay) }
         val cagedChips = @Composable { if (state.cagedEnabled) CagedRow(state, vm) }
         val board = @Composable {
             if (state.display != Display.Fretboard) {
@@ -392,7 +400,8 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                     frets = state.fretRange,
                     strings = state.stringRange,
                     muted = boardMuted,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = if (short) 4.dp else 8.dp),
+                    compact = short,
                     sounding = sounding,
                     marked = state.highlights?.positions.orEmpty(),
                     regions = state.cagedPositions.mapIndexed { i, p ->
@@ -434,15 +443,15 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
             }
         }
 
-        BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
-            if (maxWidth >= 840.dp) {
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            if (twoPane) {
                 // Desktop and tablets: a quiet, fixed-width sidebar of controls; the neck is the stage.
                 Row(Modifier.fillMaxSize()) {
                     val side = rememberScrollState()
-                    Box(Modifier.width(340.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+                    Box(Modifier.width(sidebarWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
                         Column(
-                            Modifier.fillMaxSize().verticalScroll(side).padding(horizontal = 20.dp, vertical = 20.dp),
-                            verticalArrangement = Arrangement.spacedBy(22.dp),
+                            Modifier.fillMaxSize().verticalScroll(side).padding(horizontal = 20.dp, vertical = if (short) 12.dp else 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(if (short) 16.dp else 22.dp),
                         ) {
                             level(); view(); key(false); choice(true); tuning(); range(); labels()
                         }
@@ -452,10 +461,11 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                     val stage = rememberScrollState()
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         Column(
-                            Modifier.fillMaxSize().verticalScroll(stage).padding(horizontal = 28.dp, vertical = 22.dp),
-                            verticalArrangement = Arrangement.spacedBy(18.dp),
+                            Modifier.fillMaxSize().verticalScroll(stage)
+                                .padding(horizontal = if (short) 16.dp else 28.dp, vertical = if (short) 10.dp else 22.dp),
+                            verticalArrangement = Arrangement.spacedBy(if (short) 12.dp else 18.dp),
                         ) {
-                            header(true)
+                            header(!short)
                             Row(verticalAlignment = Alignment.CenterVertically) { display() }
                             cagedChips()
                             board()
@@ -488,6 +498,8 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
         }
     }
 
+    }
+
     message?.let { text ->
         AlertDialog(
             onDismissRequest = { message = null },
@@ -498,6 +510,33 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
 
     if (showSettings) SettingsDialog(state, vm) { showSettings = false }
     if (showTuningEditor) TuningEditor(state, vm) { showTuningEditor = false }
+}
+
+/** One line of text, shrunk (down to 9 sp) until it fits its space rather than being cut off. */
+@Composable
+private fun FitText(text: String, style: TextStyle) {
+    BasicText(
+        text,
+        style = style.copy(color = LocalContentColor.current),
+        maxLines = 1,
+        autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+    )
+}
+
+/** Fretboard / Score / Tab. */
+@Composable
+private fun DisplaySwitch(current: Display, onPick: (Display) -> Unit) {
+    SingleChoiceSegmentedButtonRow {
+        Display.entries.forEachIndexed { i, d ->
+            SegmentedButton(
+                selected = current == d,
+                onClick = { onPick(d) },
+                shape = SegmentedButtonDefaults.itemShape(i, Display.entries.size),
+                icon = {},
+                label = { Text(d.name, style = MaterialTheme.typography.labelMedium) },
+            )
+        }
+    }
 }
 
 /** A group of controls with a small, quiet heading: spacing does the grouping, not boxes. */
@@ -516,6 +555,8 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 /** Logo and name, then the actions as icons with tooltips. */
 @Composable
 private fun AppTopBar(
+    short: Boolean,
+    display: (@Composable () -> Unit)?,
     state: UiState,
     canOpen: Boolean,
     canSave: Boolean,
@@ -527,14 +568,22 @@ private fun AppTopBar(
 ) {
     TopAppBar(
         navigationIcon = {
-            LocalLogo.current?.let { Image(it, contentDescription = null, modifier = Modifier.padding(start = 12.dp, end = 4.dp).size(36.dp)) }
+            LocalLogo.current?.let { Image(it, contentDescription = null, modifier = Modifier.padding(start = 12.dp, end = 4.dp).size(if (short) 28.dp else 36.dp)) }
         },
         title = {
             BoxWithConstraints {
-                Text(if (maxWidth < 240.dp) "NeckScape" else "NeckScape-Navigator", maxLines = 1, style = MaterialTheme.typography.titleLarge)
+                Text(
+                    if (maxWidth < 240.dp) "NeckScape" else "NeckScape-Navigator",
+                    maxLines = 1,
+                    style = if (short) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                )
             }
         },
         actions = {
+            display?.let {
+                it()
+                Spacer(Modifier.width(8.dp))
+            }
             if (state.undoDepth > 0) ToolIcon("Undo the last change", AppIcons.Undo, onUndo)
             if (canOpen) ToolIcon("Open a song or tab", AppIcons.Open, onOpen)
             if (canSave) SaveMenu(state.display, onPdf, onMidi)
@@ -542,6 +591,7 @@ private fun AppTopBar(
             Spacer(Modifier.width(4.dp))
         },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+        expandedHeight = if (short) 48.dp else TopAppBarDefaults.TopAppBarExpandedHeight,
     )
 }
 
@@ -572,22 +622,22 @@ private fun SaveMenu(display: Display, onPdf: (everything: Boolean) -> Unit, onM
 
 /** Always in reach at the bottom: a big Play/Stop, the tempo and the sound. */
 @Composable
-private fun TransportBar(state: UiState, vm: NeckScapeViewModel, playing: Boolean, enabled: Boolean, onPlay: () -> Unit) {
+private fun TransportBar(state: UiState, vm: NeckScapeViewModel, playing: Boolean, enabled: Boolean, short: Boolean, onPlay: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
         BoxWithConstraints(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)) {
             val compact = maxWidth < 600.dp
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (short) 4.dp else 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 FilledIconButton(
                     onClick = onPlay,
                     enabled = enabled,
-                    modifier = Modifier.size(56.dp),
+                    modifier = Modifier.size(if (short) 48.dp else 56.dp),
                     shape = CircleShape,
                 ) {
-                    Icon(if (playing) AppIcons.Stop else AppIcons.Play, contentDescription = if (playing) "Stop" else "Play", Modifier.size(30.dp))
+                    Icon(if (playing) AppIcons.Stop else AppIcons.Play, contentDescription = if (playing) "Stop" else "Play", Modifier.size(if (short) 26.dp else 30.dp))
                 }
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.Bottom) {
