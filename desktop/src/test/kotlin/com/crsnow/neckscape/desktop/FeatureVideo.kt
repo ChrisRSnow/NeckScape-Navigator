@@ -329,7 +329,7 @@ class FeatureVideo {
 
             // Each scene: narrate (waits for the previous line), change the screen, caption, hold.
             narrate("intro")
-            say(Caption("NeckScape-Navigator", "Scales, modes and chords on the guitar fretboard\n\nA short tour for teachers", fullScreen = true))
+            say(Caption("NeckScape-Navigator", "Scales, modes and chords on the guitar fretboard\n\nA short tour", fullScreen = true))
             hold(2.5)
 
             narrate("level_beginner")
@@ -360,7 +360,7 @@ class FeatureVideo {
             vm.setLabelMode(LabelMode.Intervals)
             say(Caption(
                 "Note names or intervals",
-                "One tap swaps note names for intervals — R, 2, 3, 4 …\n\nStudents see what each note does in the scale, not just what it's called.",
+                "One tap swaps note names for intervals — R, 2, 3, 4 …\n\nSee what each note does in the scale, not just what it's called.",
                 step = nextStep(),
             ))
             hold(2.0)
@@ -415,7 +415,7 @@ class FeatureVideo {
             playScale(limit = 7)
             narrate("tempo_drag")
             say(caption.value.copy(
-                body = "The Tempo slider, in the bar along the bottom, sets the playback speed.\n\n… then drag it up as the student gets it under the fingers.",
+                body = "The Tempo slider, in the bar along the bottom, sets the playback speed.\n\n… then drag it up as it gets under the fingers.",
                 listening = false,
             ))
             for (bpm in 80..200 step 10) {

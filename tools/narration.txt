@@ -1,11 +1,11 @@
 # Voice-over for the feature video: id|text. Each id is spoken where FeatureVideo
 # calls narrate("id"); scenes wait for it to finish. Write for the ear: spell out
 # symbols ("seven sharp nine", "chord two") and avoid abbreviations.
-intro|This is Neck Scape Navigator: a quick tour of scales, modes and chords on the guitar fretboard, made with teachers in mind.
+intro|This is Neck Scape Navigator: a quick tour of scales, modes and chords on the guitar fretboard.
 level_beginner|First, pick a level. Beginner opens on the first four frets, with just the major and minor scales, chords and arpeggios, so there's nothing to get lost in.
 level_more|Intermediate adds extended chords and the modes, and Advanced opens up everything else.
 whole|Here's C major, on every string and every fret. The colours follow the scale degree. The root is red, the third is orange, and the fifth is blue. So a shape looks the same in every key.
-intervals|One tap swaps the note names for intervals, so students see what each note does in the scale, not just what it's called.
+intervals|One tap swaps the note names for intervals, so you see what each note does in the scale, not just what it's called.
 dorian|Now C Dorian. Same root, new colours. The flat third and the flat seventh stand out straight away.
 lydian|And C Lydian, where the sharp fourth is the one note that changes. There are over a hundred scales, including every mode of the major, melodic minor and harmonic minor scales.
 position|The fret slider narrows the neck to a single position. Here's A minor pentatonic, between the fifth and eighth frets. The small numbers give the order to play it in.
