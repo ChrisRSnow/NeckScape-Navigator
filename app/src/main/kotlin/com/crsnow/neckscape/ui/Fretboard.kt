@@ -56,6 +56,7 @@ private val Shade = Color(0xFF05080A).copy(alpha = 0.58f)
 private val BadgeText = Color(0xFF212121)
 private val Unmarked = Color(0xFF9E9E9E)
 
+private val NAMES = 20.dp
 private val OPEN_AREA = 40.dp
 private val STRING_GAP = 34.dp
 private val EDGE = 24.dp
@@ -150,7 +151,7 @@ fun Fretboard(
     val measurer = rememberTextMeasurer()
     val currentOnTap by rememberUpdatedState(onTap)
     val numberColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val width = OPEN_AREA + (1..fretCount).fold(0.dp) { acc, f -> acc + fretWidth(f) } + 8.dp
+    val width = NAMES + OPEN_AREA + (1..fretCount).fold(0.dp) { acc, f -> acc + fretWidth(f) } + 8.dp
     val gap = if (compact) 27.dp else STRING_GAP
     val edge = if (compact) 16.dp else EDGE
     val numbers = if (compact) 18.dp else NUMBER_ROW
@@ -176,7 +177,7 @@ fun Fretboard(
         ) {
             val wirePx = wirePositions(fretCount)
             fun x(px: Float) = if (leftHanded) size.width - px else px
-            fun fretCenter(fret: Int) = if (fret == 0) OPEN_AREA.toPx() / 2 else (wirePx[fret - 1] + wirePx[fret]) / 2
+            fun fretCenter(fret: Int) = if (fret == 0) (NAMES + OPEN_AREA / 2).toPx() else (wirePx[fret - 1] + wirePx[fret]) / 2
             fun stringY(string: Int) = top.toPx() + (tuning.strings - 1 - string) * gap.toPx()
             // Half a string gap of wood beyond the outer strings, so their dots sit on the board.
             val boardTop = stringY(tuning.strings - 1) - gap.toPx() / 2
@@ -222,13 +223,16 @@ fun Fretboard(
             }
 
             // Strings, thicker towards the bass (the lower half wound, bronze-ish), with a faint shadow; unselected ones fade.
+            // Each one's open note is named at the far end, past the open-string dots.
+            val start = NAMES.toPx()
             for (s in 0 until tuning.strings) {
                 val y = stringY(s)
                 val thickness = (1f + (tuning.strings - 1 - s) * 0.35f).dp.toPx()
                 val base = if (s < tuning.strings / 2) WoundString else StringColor
                 val color = if (s in strings) base else base.copy(alpha = 0.3f)
-                drawLine(Color.Black.copy(alpha = 0.35f), Offset(x(0f), y + 1.5f.dp.toPx()), Offset(x(wirePx[fretCount]), y + 1.5f.dp.toPx()), thickness)
-                drawLine(color, Offset(x(0f), y), Offset(x(wirePx[fretCount]), y), thickness)
+                drawLine(Color.Black.copy(alpha = 0.35f), Offset(x(start), y + 1.5f.dp.toPx()), Offset(x(wirePx[fretCount]), y + 1.5f.dp.toPx()), thickness)
+                drawLine(color, Offset(x(start), y), Offset(x(wirePx[fretCount]), y), thickness)
+                label(measurer, tuning.stringNames[s], Offset(x(start / 2), y), if (s in strings) numberColor else numberColor.copy(alpha = 0.4f), 12f, bold = true)
                 if (s in muted) label(measurer, "×", Offset(x(fretCenter(0)), y), numberColor, 16f)
             }
 
@@ -300,7 +304,7 @@ fun Fretboard(
 
 /** X of the nut (index 0) and every fret wire, in px, before any left-handed mirroring. */
 private fun Density.wirePositions(fretCount: Int) = FloatArray(fretCount + 1).also { xs ->
-    xs[0] = OPEN_AREA.toPx()
+    xs[0] = (NAMES + OPEN_AREA).toPx()
     for (f in 1..fretCount) xs[f] = xs[f - 1] + fretWidth(f).toPx()
 }
 

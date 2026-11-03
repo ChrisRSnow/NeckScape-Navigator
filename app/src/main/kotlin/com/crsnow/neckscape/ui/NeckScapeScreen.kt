@@ -214,11 +214,20 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     val short = maxHeight < 480.dp
     val twoPane = maxWidth >= 840.dp || (maxWidth > maxHeight && maxWidth >= 600.dp)
     val sidebarWidth = if (maxWidth < 960.dp) 300.dp else 340.dp
+    // Phone-sized layouts: one button per choice, reading what comes next, instead of a row of segments.
+    val phone = !twoPane || short
+    val modes = ViewMode.entries.filter { it != ViewMode.Song || state.song != null || isSong }
     Scaffold(
         topBar = {
             AppTopBar(
                 short = short,
-                display = if (short) ({ DisplaySwitch(state.display, vm::setDisplay) }) else null,
+                // Short screens: what's shown, and how, are two buttons in the top bar.
+                display = if (short) ({
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DisplaySwitch(state.display, vm::setDisplay, cycle = phone)
+                        if (phone) CycleButton(modes, state.viewMode, ViewMode::name, vm::setViewMode)
+                    }
+                }) else null,
                 state = state,
                 canOpen = opener != null,
                 canSave = saver != null,
@@ -258,8 +267,8 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
         }
         val view = @Composable {
             Section("Show") {
-                val modes = ViewMode.entries.filter { it != ViewMode.Song || state.song != null || isSong }
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                if (phone) CycleButton(modes, state.viewMode, ViewMode::name, vm::setViewMode, Modifier.fillMaxWidth())
+                else SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     modes.forEachIndexed { i, m ->
                         SegmentedButton(
                             selected = state.viewMode == m,
@@ -457,7 +466,13 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                             Modifier.fillMaxSize().verticalScroll(side).padding(horizontal = 20.dp, vertical = if (short) 12.dp else 20.dp),
                             verticalArrangement = Arrangement.spacedBy(if (short) 16.dp else 22.dp),
                         ) {
-                            level(); view(); key(false); choice(true); tuning(); range(); labels()
+                            // On a phone on its side the neck range leads, beside the neck.
+                            if (short) range()
+                            level()
+                            if (!short) view()
+                            key(false); choice(true); tuning()
+                            if (!short) range()
+                            labels()
                         }
                         scrollbars?.Vertical(side, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
                     }
@@ -486,15 +501,19 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                         Modifier.fillMaxSize().verticalScroll(page).padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(18.dp),
                     ) {
-                        // The neck within the first screenful; the finer controls follow.
+                        // The neck within the first screenful, its range sliders right under it; the finer controls follow.
                         level()
                         header(false)
                         board()
-                        display()
-                        view(); key(true); choice(false)
+                        range()
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CycleButton(Display.entries, state.display, Display::name, vm::setDisplay, Modifier.weight(1f))
+                            CycleButton(modes, state.viewMode, ViewMode::name, vm::setViewMode, Modifier.weight(1f))
+                        }
+                        key(true); choice(false)
                         cagedChips()
                         below()
-                        range(); tuning(); labels()
+                        tuning(); labels()
                     }
                     scrollbars?.Vertical(page, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
                 }
@@ -529,8 +548,9 @@ private fun FitText(text: String, style: TextStyle) {
 
 /** Fretboard / Score / Tab. */
 @Composable
-private fun DisplaySwitch(current: Display, onPick: (Display) -> Unit) {
-    SingleChoiceSegmentedButtonRow {
+private fun DisplaySwitch(current: Display, onPick: (Display) -> Unit, cycle: Boolean = false) {
+    if (cycle) CycleButton(Display.entries, current, Display::name, onPick)
+    else SingleChoiceSegmentedButtonRow {
         Display.entries.forEachIndexed { i, d ->
             SegmentedButton(
                 selected = current == d,
@@ -540,6 +560,17 @@ private fun DisplaySwitch(current: Display, onPick: (Display) -> Unit) {
                 label = { Text(d.name, style = MaterialTheme.typography.labelMedium) },
             )
         }
+    }
+}
+
+/** One button for a set of choices: it reads the next one (Fretboard showing → "Score"), and a press moves on to it. */
+@Composable
+private fun <T> CycleButton(options: List<T>, current: T, name: (T) -> String, onPick: (T) -> Unit, modifier: Modifier = Modifier) {
+    val next = options[(options.indexOf(current) + 1) % options.size]
+    FilledTonalButton(onClick = { onPick(next) }, modifier = modifier, shape = MaterialTheme.shapes.medium) {
+        Text(name(next), maxLines = 1, style = MaterialTheme.typography.labelLarge)
+        Spacer(Modifier.width(6.dp))
+        Icon(AppIcons.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp))
     }
 }
 
