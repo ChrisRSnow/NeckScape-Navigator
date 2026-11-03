@@ -546,7 +546,7 @@ private fun FitText(text: String, style: TextStyle) {
     )
 }
 
-/** Fretboard / Score / Tab. */
+/** Fretboard / Tab / Score. */
 @Composable
 private fun DisplaySwitch(current: Display, onPick: (Display) -> Unit, cycle: Boolean = false) {
     if (cycle) CycleButton(Display.entries, current, Display::name, onPick)
@@ -563,7 +563,7 @@ private fun DisplaySwitch(current: Display, onPick: (Display) -> Unit, cycle: Bo
     }
 }
 
-/** One button for a set of choices: it reads the next one (Fretboard showing → "Score"), and a press moves on to it. */
+/** One button for a set of choices: it reads the next one (Fretboard showing → "Tab"), and a press moves on to it. */
 @Composable
 private fun <T> CycleButton(options: List<T>, current: T, name: (T) -> String, onPick: (T) -> Unit, modifier: Modifier = Modifier) {
     val next = options[(options.indexOf(current) + 1) % options.size]

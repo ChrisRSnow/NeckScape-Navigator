@@ -57,10 +57,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
 /** [Song]: a progression or tab pushed by an AI or imported from a file (or an empty neck). */
-enum class ViewMode { Scale, Arpeggio, Chord, Song }
+enum class ViewMode { Scale, Chord, Arpeggio, Song }
 
 /** How the notes are shown: on the neck, in standard notation, or as tab. */
-enum class Display { Fretboard, Score, Tab }
+enum class Display { Fretboard, Tab, Score }
 enum class LabelMode { Notes, Intervals }
 
 const val MIN_TEMPO = 40
