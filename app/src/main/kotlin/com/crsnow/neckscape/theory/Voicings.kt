@@ -19,7 +19,26 @@ data class Voicing(val frets: List<Int?>) {
  * ones a hand could plausibly play.
  */
 object VoicingFinder {
+    /** The best couple of shapes at each position, ordered up the neck. */
     fun find(
+        tuning: Tuning,
+        root: Note,
+        chord: ChordType,
+        fretCount: Int,
+        maxSpan: Int = 3,
+        allowInversions: Boolean = false,
+    ): List<Voicing> = bestPerPosition(findAll(tuning, root, chord, fretCount, maxSpan, allowInversions))
+
+    /**
+     * Keeps the first (best) two shapes at each position of a [findAll] list.
+     * Filter to the frets on view first, or a shape that's playable there can
+     * lose out to better ones that reach past it.
+     */
+    fun bestPerPosition(shapes: List<Voicing>): List<Voicing> =
+        shapes.groupBy { it.position }.values.flatMap { it.take(2) }
+
+    /** Every playable shape, ordered up the neck, best first at each position. */
+    fun findAll(
         tuning: Tuning,
         root: Note,
         chord: ChordType,
@@ -84,12 +103,11 @@ object VoicingFinder {
             search(0, options)
         }
 
-        // Keep the best couple of shapes at each position, ordered up the neck.
         return found.entries
             .map { (frets, score) -> Voicing(frets) to score }
             .groupBy { it.first.position }
             .toSortedMap()
-            .flatMap { (_, shapes) -> shapes.sortedByDescending { it.second }.take(2).map { it.first } }
+            .flatMap { (_, shapes) -> shapes.sortedByDescending { it.second }.map { it.first } }
     }
 
     /**

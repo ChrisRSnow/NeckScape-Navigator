@@ -113,6 +113,7 @@ private val ROOT_LABELS = listOf("C", "C♯/D♭", "D", "D♯/E♭", "E", "F", "
 fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val voicings by vm.voicings.collectAsStateWithLifecycle()
+    val nearestVoicings by vm.nearestVoicings.collectAsStateWithLifecycle()
     val sounding by vm.sounding.collectAsStateWithLifecycle()
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showTuningEditor by rememberSaveable { mutableStateOf(false) }
@@ -150,8 +151,9 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     val boardDots = (if (isSong) songDotList else dots) + overlay
     val boardMuted = if (isSong) songMuted else muted
 
-    val music = remember(state, dots, sequence, voicings) {
-        if (isSong) musicForSong(state, songDotList + overlay.filter { !it.faded }) else musicFor(state, dots, sequence, voicings)
+    val music = remember(state, dots, sequence, voicings, nearestVoicings) {
+        if (isSong) musicForSong(state, songDotList + overlay.filter { !it.faded })
+        else musicFor(state, dots, sequence, voicings.ifEmpty { nearestVoicings })
     }
     val saver = LocalFileSaver.current
     val opener = LocalFileOpener.current
@@ -426,6 +428,8 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                     onStep = vm::stepCaged,
                 ) else VoicingBar(
                     text = when {
+                        voicings.isEmpty() && nearestVoicings.isNotEmpty() ->
+                            "No shape fits frets ${state.fretRange.first}–${state.fretRange.last} · nearest: ${nearestVoicings.joinToString("  ") { it.tab }}"
                         voicings.isEmpty() -> "No playable shapes found"
                         voicing == null -> "All chord tones · ${voicings.size} shapes"
                         else -> "Shape ${state.voicingIndex + 1} of ${voicings.size}  ·  ${voicing.tab}"

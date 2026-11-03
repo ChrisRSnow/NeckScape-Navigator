@@ -176,4 +176,9 @@ class SnapshotTest {
     @Test fun songScore() = snapshot("song-score", 1280, 1000, 1f) { loadRisingSun(it); it.setDisplay(Display.Score) }
     @Test fun songTab() = snapshot("song-tab", 1280, 1000, 1f) { loadRisingSun(it); it.setDisplay(Display.Tab) }
     @Test fun chordScorePhone() = snapshot("chord-score-phone", 1080, 2376, 2.75f) { it.setViewMode(ViewMode.Chord); it.setDisplay(Display.Score) }
+    @Test fun chordScoreBeginnerD() = snapshot("chord-score-beginner-d", 1280, 1000, 1f) { it.setViewMode(ViewMode.Chord); it.selectRoot(2); it.setDisplay(Display.Score) }
+    @Test fun chordTabNearest() = snapshot("chord-tab-nearest", 1280, 1000, 1f) {
+        it.setLevel(Level.Intermediate); it.setViewMode(ViewMode.Chord); it.setFretRange(0, 4)
+        it.selectRoot(3); it.selectChord(Chords.all.indexOfFirst { c -> c.symbol == "m9" }); it.setDisplay(Display.Tab)
+    }
 }

@@ -241,14 +241,29 @@ class NeckScapeViewModel : ViewModel() {
         .distinctUntilChanged()
         .mapLatest { key ->
             if (key.mode != ViewMode.Chord) emptyList()
-            else VoicingFinder.find(key.tuning, key.root, key.chord, key.frets)
+            else VoicingFinder.findAll(key.tuning, key.root, key.chord, key.frets)
         }
         .flowOn(Dispatchers.Default)
 
-    val voicings: StateFlow<List<Voicing>> = combine(
+    private val windowed = combine(
         allVoicings,
         _state.map { it.fretRange to it.stringRange }.distinctUntilChanged(),
-    ) { shapes, (frets, strings) -> shapes.filter { it.fits(frets, strings) } }
+    ) { shapes, (frets, strings) ->
+        val fitting = VoicingFinder.bestPerPosition(shapes.filter { it.fits(frets, strings) })
+        // Nothing fits the frets on view: the nearest couple of shapes, so the score and tab still show the chord.
+        val nearest = if (fitting.isNotEmpty()) emptyList() else VoicingFinder.bestPerPosition(
+            shapes.filter { it.fits(0..Int.MAX_VALUE, strings) }
+                .sortedBy { v -> v.frets.filterNotNull().sumOf { f -> maxOf(frets.first - f, f - frets.last, 0) } },
+        ).take(2)
+        fitting to nearest
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList<Voicing>() to emptyList())
+
+    /** The shapes that fit the frets and strings on view. */
+    val voicings: StateFlow<List<Voicing>> = windowed.map { it.first }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** When no shape fits the view, the closest ones outside it (for the score and tab). */
+    val nearestVoicings: StateFlow<List<Voicing>> = windowed.map { it.second }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private fun edit(block: UiState.() -> UiState) = _state.update { old ->

@@ -172,6 +172,19 @@ class TheoryTest {
         assertTrue("x7678x" in tabs("E", "7♯9")) // the Hendrix chord
     }
 
+    @Test fun `every beginner chord has a shape in the first four frets`() {
+        // Open D (xx0232) used to lose out at its position to x54232, which then fell outside frets 0–4.
+        val std = Tunings.all.first()
+        for (type in Chords.all.filter { Level.Beginner.allows(it) }) for (pc in 0 until 12) {
+            val root = Note.spellings(pc).first()
+            val fitting = VoicingFinder.bestPerPosition(
+                VoicingFinder.findAll(std, root, type, 22).filter { v -> v.frets.all { it == null || it in 0..4 } },
+            )
+            assertTrue("${root.name}${type.symbol}", fitting.isNotEmpty())
+        }
+        assertTrue("xx0232" in VoicingFinder.findAll(std, Note.parse("D"), chord(""), 22).map { it.tab })
+    }
+
     @Test fun `every chord has shapes in standard tuning`() {
         val std = Tunings.all.first()
         Chords.all.forEach { type ->
