@@ -118,6 +118,16 @@ compileSdk 37 · minSdk 26.
 
 Keep `ui/` free of `android.*` imports — the desktop build compiles it too.
 
+## Design
+
+One brand look everywhere (`ui/Theme.kt`): the logo's teal and cyan with lime
+accents, light and dark schemes, Inter type, soft rounded shapes. The layout
+adapts to the window: a fixed controls sidebar beside the neck/score on desktops,
+tablets and phones in landscape (slimmer bars and a compact neck when the screen
+is short); one column on phones, the neck in the first screenful. A transport bar
+(Play/Stop, tempo, sound) runs along the bottom. Desktop builds add scroll bars
+where content overflows.
+
 ## Notation and PDFs
 
 Score, tab and PDFs are drawn from one vector model (`notation/Sheet.kt`): lines,
