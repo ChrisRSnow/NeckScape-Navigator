@@ -4,6 +4,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -21,7 +23,10 @@ import com.crsnow.neckscape.theory.VoicingFinder
 import com.crsnow.neckscape.theory.playingOrder
 import com.crsnow.neckscape.ui.Display
 import com.crsnow.neckscape.ui.LabelMode
+import com.crsnow.neckscape.ui.AudioOutput
+import com.crsnow.neckscape.ui.LocalNotePlayer
 import com.crsnow.neckscape.ui.LocalScrollbars
+import com.crsnow.neckscape.ui.NotePlayer
 import com.crsnow.neckscape.ui.NoteMark
 import com.crsnow.neckscape.ui.UiState
 import com.crsnow.neckscape.ui.ViewMode
@@ -32,6 +37,8 @@ import com.crsnow.neckscape.ui.pdfFor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
@@ -126,6 +133,50 @@ class SnapshotTest {
     }
 
     /** A small window: the fretboard and the page both need scroll bars. */
+    @Test fun desktopNote() = snapshot("desktop-note", 1280, 1000, 1f) { it.setViewMode(ViewMode.Note) }
+    @Test fun phoneNote() = snapshot("phone-note", 1080, 2376, 2.75f) { it.setViewMode(ViewMode.Note); it.selectRoot(1) }
+    @Test fun phoneNoteTab() = snapshot("phone-note-tab", 1080, 2376, 2.75f) { it.setViewMode(ViewMode.Note); it.setDisplay(Display.Tab) }
+
+    @Test fun phoneCaged() = snapshot("phone-caged", 1080, 2376, 2.75f) { it.setLevel(Level.Intermediate); it.setViewMode(ViewMode.Chord) }
+
+    @Test fun keyChordShapes() = snapshot("key-chord-shapes", 1280, 1100, 1f) { it.setLevel(Level.Advanced); it.pickKeyChord(1) }
+    @Test fun keyChordDiminishedShape() = snapshot("key-chord-dim", 1280, 1100, 1f) {
+        it.setLevel(Level.Advanced); it.pickKeyChord(6); it.setCaged(1)
+    }
+
+    @Test fun keyChordTones() = snapshot("key-chord-tones", 1280, 1100, 1f) { it.setLevel(Level.Intermediate); it.pickKeyChord(1) }
+
+    @Test fun tappingACagedBandStrumsItsShape() {
+        val vm = NeckScapeViewModel()
+        val played = ArrayList<Int>()
+        val player = NotePlayer(object : AudioOutput {
+            override fun play(pcm: ShortArray, sampleRate: Int) { synchronized(played) { played += pcm.size } }
+            override fun release() {}
+        })
+        val scene = ImageComposeScene(1280, 1000, Density(1f)) {
+            CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalScrollbars provides DesktopScrollbars, LocalNotePlayer provides player) {
+                NeckScapeTheme(dark = true, fontFamily = InterFamily, logo = LogoPainter) { NeckScapeScreen(vm) }
+            }
+        }
+        scene.render()
+        vm.setLevel(Level.Intermediate)
+        vm.setViewMode(ViewMode.Chord)
+        var t = 0L
+        repeat(5) { scene.render(t); t += 100_000_000; Thread.sleep(50) }
+        fun tap(x: Float, y: Float): Set<String> {
+            scene.sendPointerEvent(PointerEventType.Press, Offset(x, y))
+            scene.sendPointerEvent(PointerEventType.Release, Offset(x, y))
+            repeat(5) { scene.render(t); t += 100_000_000; Thread.sleep(50) }
+            return vm.sounding.value.map { "${it.string}:${it.fret}" }.toSet()
+        }
+        // The C band (upper lane, from the nut) and the A band below it, over frets 2–5.
+        assertEquals(setOf("1:3", "2:2", "3:0", "4:1", "5:0"), tap(450f, 395f))
+        assertEquals(setOf("1:3", "2:5", "3:5", "4:5", "5:3"), tap(700f, 408f))
+        Thread.sleep(300)
+        assertTrue("the strum reached the speaker", synchronized(played) { played.any { it > 0 } })
+        scene.close()
+    }
+
     @Test fun desktopNarrow() = snapshot("desktop-narrow", 820, 1000, 1f)
 
     /** A short phrase in every sound, as WAVs in build/sounds, for listening (the video helpers write the WAV). */

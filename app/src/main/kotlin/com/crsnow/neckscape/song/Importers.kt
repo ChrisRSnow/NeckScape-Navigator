@@ -66,8 +66,9 @@ object Importers {
 
 /** ChordPro: directives and [Chord] markers; one bar per chord, lyrics dropped. */
 object ChordProImporter {
-    private val DIRECTIVE = Regex("""^\s*\{\s*([a-zA-Z_]+)\s*(?::\s*(.*?))?\s*}\s*$""")
-    private val CHORD = Regex("""\[([^\]\s]+)]""")
+    // Braces and brackets are escaped even where Java doesn't need it: Android's ICU regex engine rejects them bare.
+    private val DIRECTIVE = Regex("""^\s*\{\s*([a-zA-Z_]+)\s*(?::\s*(.*?))?\s*\}\s*$""")
+    private val CHORD = Regex("""\[([^\]\s]+)\]""")
 
     fun read(text: String, fileName: String, tuning: Tuning): ImportResult {
         var title: String? = null

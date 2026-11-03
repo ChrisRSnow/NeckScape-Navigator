@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 class TheoryTest {
     private val c = Note.parse("C")
@@ -20,6 +22,13 @@ class TheoryTest {
         assertEquals("F", (Note.parse("Db") + Interval.parse("3")).name)
         assertEquals("B♭♭", (c + Interval.parse("bb7")).name)
         assertEquals("F♯", (c + Interval.parse("#11")).name)
+    }
+
+    @Test fun `octaves follow the letter`() {
+        assertEquals("C4", c.withOctave(60))
+        assertEquals("E2", Note.parse("E").withOctave(40))
+        assertEquals("C♭4", Note.parse("Cb").withOctave(59))
+        assertEquals("B♯3", Note.parse("B#").withOctave(60))
     }
 
     @Test fun `major and modes`() {
@@ -237,6 +246,44 @@ class TheoryTest {
         assertEquals(2..5, c.first { it.shape == CagedShape.A }.frets)
         assertTrue(Tunings.all.first().isStandardShape())
         assertTrue(!Tunings.all.first { it.name == "DADGAD" }.isStandardShape())
+    }
+
+    @Test fun `diminished and augmented triads move the fifths of the CAGED shapes`() {
+        assertEquals(true to -1, cagedQuality(chord("dim").intervals))
+        assertEquals(false to 1, cagedQuality(chord("aug").intervals))
+        assertEquals(true to -1, cagedQuality(chord("m7♭5").intervals))
+        assertEquals(false to 0, cagedQuality(chord("7").intervals))
+        // B° as an A shape is the Bm shape x24432 with both fifths a fret lower: B F B D F.
+        val bdim = cagedPositions(11, minor = true, fretCount = 22, fifth = -1)
+        assertEquals("x23431", bdim.first { it.shape == CagedShape.A }.voicing.tab)
+        // A fifth flattened below the nut drops out: E° as the open E shape loses its open B string.
+        assertEquals("0120x0", cagedPositions(4, minor = true, fretCount = 22, fifth = -1).first { it.shape == CagedShape.E && it.offset == 0 }.voicing.tab)
+    }
+
+    @Test fun `high frets ring on, not just tick`() {
+        // How long a note stays within 20 dB of its loudest, in 50 ms windows.
+        fun ringTime(midi: Int, instrument: Instrument): Double {
+            val pcm = PluckSynth.render(listOf(NoteEvent(midi, 0.0)), ring = 2.5, instrument = instrument)
+            val win = PluckSynth.SAMPLE_RATE / 20
+            val rms = (0 until pcm.size / win).map { w -> sqrt((0 until win).sumOf { pcm[w * win + it].toDouble().pow(2) } / win) }
+            return rms.count { it > rms.max() / 10 } * 0.05
+        }
+        for (instrument in listOf(Instrument.Acoustic, Instrument.Classical, Instrument.Electric)) {
+            val low = ringTime(40, instrument)
+            val top = ringTime(88, instrument) // high E string, 24th fret
+            println("ring $instrument: E2 ${low}s, E6 ${top}s")
+            assertTrue("$instrument E6 rings ${top}s", top >= 0.8)
+            assertTrue("$instrument E2 rings ${low}s", low >= 2.0)
+        }
+    }
+
+    @Test fun `a CAGED shape past the last fret keeps its playable triad`() {
+        // C as a D shape at fret 22 needs fret 25 on the B string; on a 24-fret neck it's x x 22 24 x 24 (C G E).
+        val d = cagedPositions(0, minor = false, fretCount = 24).last { it.shape == CagedShape.D }
+        assertEquals("x x 22 24 x 24", d.voicing.tab)
+        assertEquals(22..24, d.frets)
+        // On 22 frets it can't be played at all, so it isn't offered.
+        assertTrue(cagedPositions(0, minor = false, fretCount = 22).none { it.offset == 22 })
     }
 
     @Test fun `every sound renders a clean, audible clip at the right pitch`() {

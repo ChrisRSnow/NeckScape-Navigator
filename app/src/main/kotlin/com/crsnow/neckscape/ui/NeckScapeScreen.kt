@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -102,7 +103,6 @@ import com.crsnow.neckscape.theory.Scales
 import com.crsnow.neckscape.theory.Tuning
 import com.crsnow.neckscape.theory.Tunings
 import com.crsnow.neckscape.theory.Voicing
-import com.crsnow.neckscape.theory.diatonicChords
 import com.crsnow.neckscape.theory.playingOrder
 import com.crsnow.neckscape.theory.thereAndBack
 import kotlin.math.roundToInt
@@ -133,10 +133,20 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     val cagedShape = caged?.voicing?.takeIf { v -> v.frets.all { it == null || it <= state.fretCount } }
     val triad = state.chord.pitchSet.size == 3 && 7 in state.chord.pitchSet && (3 in state.chord.pitchSet || 4 in state.chord.pitchSet)
     val voicing = if (state.viewMode == ViewMode.Chord && caged != null) cagedShape.takeIf { triad } else voicings.getOrNull(state.voicingIndex)
-    val dots = remember(marks, state.tuning, state.fretRange, state.stringRange, voicing, state.showOrder) {
-        buildDots(state.tuning, marks, state.fretRange, state.stringRange, voicing, state.showOrder)
+    val noteView = state.viewMode == ViewMode.Note
+    val dots = remember(marks, state.tuning, state.fretRange, state.stringRange, voicing, state.showOrder, noteView) {
+        val all = buildDots(state.tuning, marks, state.fretRange, state.stringRange, voicing, state.showOrder && !noteView)
+        // One note everywhere: each dot names its octave (C2, C3 …) in place of a playing order.
+        if (noteView && state.labelMode == LabelMode.Notes) all.map { d ->
+            d.copy(mark = d.mark.copy(label = state.root.withOctave(state.tuning.midi[d.position.string] + d.position.fret)))
+        } else all
     }
     val muted = voicing?.frets?.withIndex()?.filter { it.value == null }?.map { it.index }?.toSet().orEmpty()
+    // A chord of the key picked over the scale: below Advanced its notes stay bright and the rest of the scale fades.
+    val keyTones = state.pickedKeyChord?.takeIf { state.shapeChord == null }?.let { k ->
+        val pcs = k.type!!.intervals.map { Math.floorMod(k.root.pitchClass + it.semitones, 12) }.toSet()
+        dots.filter { !it.faded && state.tuning.pitchClassAt(it.position.string, it.position.fret) in pcs }.map { it.position }.toSet()
+    }.orEmpty()
     // Scales and arpeggios: the visible notes in the numbered order.
     val sequence = remember(dots, state.tuning) {
         playingOrder(state.tuning, dots.filter { !it.faded }.map { it.position }).keys.toList()
@@ -148,7 +158,8 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     val isSong = state.viewMode == ViewMode.Song
     val (songDotList, songMuted) = remember(state) { if (isSong) songDots(state) else emptyList<Dot>() to emptySet() }
     val overlay = remember(state) { state.overlay?.let { overlayDots(state, it, alone = isSong && state.song == null) }.orEmpty() }
-    val boardDots = (if (isSong) songDotList else dots) + overlay
+    val shownDots = if (keyTones.isEmpty()) dots else dots.map { if (it.position in keyTones) it else it.copy(faded = true) }
+    val boardDots = (if (isSong) songDotList else shownDots) + overlay
     val boardMuted = if (isSong) songMuted else muted
 
     val music = remember(state, dots, sequence, voicings, nearestVoicings) {
@@ -187,8 +198,8 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
             ViewMode.Song -> {
                 runCatching { vm.playSong(loop = false, section = null, tempoPct = 100.0) }.onFailure { message = it.message }
             }
-            // Up the numbered order and back down.
-            ViewMode.Scale, ViewMode.Arpeggio -> {
+            // Up the numbered order and back down (the note view: one per octave).
+            ViewMode.Scale, ViewMode.Arpeggio, ViewMode.Note -> {
                 val step = 60.0 / state.tempo
                 player.play(PluckSynth.upAndDown(sequence.map { state.tuning.midi[it.string] + it.fret }, step))
                 vm.follow(sequence.thereAndBack().map { setOf(it) }, step, playing = true)
@@ -275,14 +286,16 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                             onClick = { vm.setViewMode(m) },
                             shape = SegmentedButtonDefaults.itemShape(i, modes.size),
                             icon = {},
-                            label = { Text(m.name, maxLines = 1, style = MaterialTheme.typography.labelMedium) },
+                            // Up to five views share a sidebar's width, so "Arpeggio" needs the room.
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                            label = { FitText(m.name, MaterialTheme.typography.labelMedium) },
                         )
                     }
                 }
             }
         }
         val key = @Composable { compact: Boolean ->
-            if (!isSong) Section("Key") { RootPicker(state.root.pitchClass, compact, vm::selectRoot) }
+            if (!isSong) Section(if (noteView) "Note" else "Key") { RootPicker(state.root.pitchClass, compact, vm::selectRoot) }
         }
         val choice = @Composable { stacked: Boolean ->
             when (state.viewMode) {
@@ -316,7 +329,7 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                         header = { i -> Chords.all[offered[i]].group.takeIf { i == 0 || Chords.all[offered[i - 1]].group != it } },
                     )
                 }
-                ViewMode.Song -> {}
+                ViewMode.Note, ViewMode.Song -> {}
             }
         }
         val tuning = @Composable {
@@ -347,7 +360,7 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                         )
                     }
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                if (!noteView) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Playing-order numbers", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     Switch(checked = state.showOrder, onCheckedChange = vm::setShowOrder)
                 }
@@ -416,14 +429,27 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                     sounding = sounding,
                     marked = state.highlights?.positions.orEmpty(),
                     regions = state.cagedPositions.mapIndexed { i, p ->
-                        Region(p.shape.name, p.frets, cagedColor(p.shape.name), selected = i == state.cagedPick)
+                        Region(
+                            p.shape.name, p.frets, cagedColor(p.shape.name), selected = i == state.cagedPick,
+                            shape = p.voicing.frets.withIndex().mapNotNull { (str, f) -> f?.let { Position(str, it) } }.toSet(),
+                        )
                     },
-                    outlined = if (voicing == null) cagedShape?.frets?.withIndex()?.mapNotNull { (str, f) -> f?.let { Position(str, it) } }?.toSet().orEmpty() else emptySet(),
+                    outlined = when {
+                        voicing != null -> emptySet()
+                        else -> cagedShape?.frets?.withIndex()?.mapNotNull { (str, f) -> f?.let { Position(str, it) } }?.toSet().orEmpty()
+                    },
                     onTap = { p ->
                         // A tapped note cuts off whatever was playing, so stop its ringing too.
                         if (playback.playing) vm.stopPlayback()
                         player?.playNote(state.tuning.midi[p.string] + p.fret)
                         vm.follow(listOf(setOf(p)), step = 0.6)
+                    },
+                    // A tapped CAGED band strums its chord shape.
+                    onRegionTap = { i ->
+                        state.cagedPositions.getOrNull(i)?.let { p ->
+                            if (playback.playing) vm.stopPlayback()
+                            strum(p.voicing)
+                        }
                     },
                 )
             }
@@ -447,7 +473,7 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                     onStep = vm::stepVoicing,
                 )
                 ViewMode.Scale -> DiatonicChords(state, vm)
-                ViewMode.Arpeggio -> {}
+                ViewMode.Arpeggio, ViewMode.Note -> {}
                 ViewMode.Song -> SongBars(state) { i ->
                     vm.selectBar(i)
                     val s = vm.state.value
@@ -868,8 +894,10 @@ private fun VoicingBar(text: String, enabled: Boolean, onStep: (Int) -> Unit) {
 
 @Composable
 private fun DiatonicChords(state: UiState, vm: NeckScapeViewModel) {
-    val chords = diatonicChords(state.scale, state.root, state.sevenths)
+    val chords = state.keyChords
     if (chords.isEmpty()) return
+    // A tap shows that chord over the scale (at Advanced, its CAGED shapes); "Open" takes it to Chord view.
+    val shapes = state.level == Level.Advanced && state.cagedEnabled
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -888,11 +916,12 @@ private fun DiatonicChords(state: UiState, vm: NeckScapeViewModel) {
         LazyRow(state = row, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(chords) { degree, chord ->
                 val usable = chord.type != null && state.level.allows(chord.type)
+                val picked = state.keyChord == degree && state.pickedKeyChord != null
                 Surface(
-                    onClick = { chord.type?.let { vm.openChord(degree, chord.root, it) } },
+                    onClick = { vm.pickKeyChord(degree) },
                     enabled = usable,
                     shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = if (picked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier.height(52.dp),
                 ) {
                     Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -907,6 +936,26 @@ private fun DiatonicChords(state: UiState, vm: NeckScapeViewModel) {
             }
         }
         LocalScrollbars.current?.HorizontalLazy(row, Modifier.fillMaxWidth())
+        run {
+            val keyed = state.pickedKeyChord
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val name = keyed?.type?.displayName(keyed.root)
+                Text(
+                    when {
+                        keyed == null && shapes -> "Tap a chord to see its CAGED shapes over the scale"
+                        keyed == null -> "Tap a chord to pick out its notes in the scale"
+                        shapes -> "$name's CAGED shapes over the scale · tap it again for the key's own"
+                        else -> "$name's notes stand out in the scale · tap it again to clear"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                if (keyed != null) TextButton(onClick = { vm.openChord(state.keyChord, keyed.root, keyed.type!!) }) {
+                    Text("Open ${keyed.type!!.displayName(keyed.root)}")
+                }
+            }
+        }
     }
 }
 

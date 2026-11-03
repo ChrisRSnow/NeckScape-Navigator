@@ -23,10 +23,17 @@ apps built from the same code.
   up the neck for any scale, arpeggio or chord, major or minor; pick one to see that
   position, with its chord shape ringed (or played, in Chord view, with ‹ › stepping
   C → A → G → E → D up the neck). Score, tab, PDF and playback follow the position.
+  Each chord shape has a cloud drawn round it in its shape's colour; tap a shape's band
+  above the neck to hear it strummed. At Advanced,
+  tapping a chord of the key (ii Dm, vii B° …) shows that chord's CAGED shapes over
+  the scale; diminished and augmented shapes move the fifths of the minor and major ones.
 - **Arpeggio view** — the chord's tones across the neck, numbered and played
   up and down like a scale (shares the chord with Chord view).
 - **Chord view** — 106 chord types. Every chord tone on the neck, then step
   through playable shapes (‹ ›) generated for the current tuning.
+- **Note view** — pick a note and see every place it falls on the neck, in any
+  tuning, each labelled with its octave (C3, C4 …). Opens on the whole neck; ▶
+  plays one of each octave up and back down.
 - Switching views keeps them related: C Ionian ⇄ C, C Dorian ⇄ Cm, Cm7 → C Aeolian.
 - **Fret range** and **string range** sliders limit what's shown (and which
   chord shapes are offered) — e.g. frets 5–8 shows one box pattern.

@@ -16,7 +16,10 @@ import com.crsnow.neckscape.theory.ChordSymbol
 import com.crsnow.neckscape.theory.CagedPosition
 import com.crsnow.neckscape.theory.Instrument
 import com.crsnow.neckscape.theory.Interval
+import com.crsnow.neckscape.theory.DiatonicChord
 import com.crsnow.neckscape.theory.cagedPositions
+import com.crsnow.neckscape.theory.cagedQuality
+import com.crsnow.neckscape.theory.diatonicChords
 import com.crsnow.neckscape.theory.isMinorQuality
 import com.crsnow.neckscape.theory.isStandardShape
 import com.crsnow.neckscape.theory.Level
@@ -56,8 +59,11 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
-/** [Song]: a progression or tab pushed by an AI or imported from a file (or an empty neck). */
-enum class ViewMode { Scale, Chord, Arpeggio, Song }
+/**
+ * [Note]: every place one note falls on the neck, for the tuning in use.
+ * [Song]: a progression or tab pushed by an AI or imported from a file (or an empty neck).
+ */
+enum class ViewMode { Scale, Chord, Arpeggio, Note, Song }
 
 /** How the notes are shown: on the neck, in standard notation, or as tab. */
 enum class Display { Fretboard, Tab, Score }
@@ -113,6 +119,8 @@ data class UiState(
     val undoDepth: Int = 0,
     /** The CAGED position picked (index into [cagedPositions]), or -1 for all of them. */
     val cagedPick: Int = -1,
+    /** A chord of the key picked in the Scale view (index into [keyChords]), or -1 for none. */
+    val keyChord: Int = -1,
 ) {
     val family: ScaleFamily get() = Scales.families[familyIndex]
     val scale: Scale get() = family.scales[scaleIndex]
@@ -135,14 +143,32 @@ data class UiState(
         get() = level != Level.Beginner && baseTuning.isStandardShape() &&
             viewMode in setOf(ViewMode.Scale, ViewMode.Arpeggio, ViewMode.Chord)
 
+    /** The chords built on each degree of the scale (empty for scales that aren't seven-note). */
+    val keyChords: List<DiatonicChord> get() = diatonicChords(scale, root, sevenths)
+
+    /**
+     * The chord of the key picked in the Scale view: its notes are ringed in the
+     * scale, and at Advanced its CAGED shapes replace the key's own.
+     */
+    val pickedKeyChord: DiatonicChord?
+        get() = if (viewMode == ViewMode.Scale && keyChord >= 0) keyChords.getOrNull(keyChord)?.takeIf { it.type != null && level.allows(it.type) } else null
+
+    /** The picked chord of the key whose CAGED shapes sit over the scale (Advanced only). */
+    val shapeChord: DiatonicChord? get() = pickedKeyChord?.takeIf { level == Level.Advanced }
+
     /** The five shapes up the neck for the current root and quality; empty when CAGED doesn't apply. */
     val cagedPositions: List<CagedPosition>
         get() {
             if (!cagedEnabled) return emptyList()
             // Shapes are relative to the open strings: E standard, or a whole tuning shifted (E♭ standard, a capo).
             val shift = tuning.midi[0] - 40
-            val minor = isMinorQuality(if (viewMode == ViewMode.Scale) scale.intervals else chord.intervals)
-            return cagedPositions(Math.floorMod(root.pitchClass - shift, 12), minor, fretCount)
+            val keyed = shapeChord
+            val (minor, fifth) = when {
+                keyed != null -> cagedQuality(keyed.type!!.intervals)
+                viewMode == ViewMode.Scale -> isMinorQuality(scale.intervals) to 0
+                else -> cagedQuality(chord.intervals)
+            }
+            return cagedPositions(Math.floorMod((keyed?.root ?: root).pitchClass - shift, 12), minor, fretCount, fifth)
         }
 
     val cagedSelected: CagedPosition? get() = if (cagedPick < 0) null else cagedPositions.getOrNull(cagedPick)
@@ -153,13 +179,28 @@ data class UiState(
 
     /** Intervals of whatever is on the fretboard right now. */
     val intervals: List<Interval>
-        get() = if (viewMode == ViewMode.Scale) scale.intervals else chord.intervals
+        get() = when (viewMode) {
+            ViewMode.Scale -> scale.intervals
+            ViewMode.Note -> listOf(Interval(0, 1))
+            else -> chord.intervals
+        }
 
     val title: String
         get() = when (viewMode) {
-            ViewMode.Scale -> "${root.name} ${scale.name}" + (cagedSelected?.let { " · ${it.shape} shape" } ?: "")
+            ViewMode.Scale -> "${root.name} ${scale.name}" + run {
+                val keyed = pickedKeyChord?.let { it.type!!.displayName(it.root) }
+                val shape = cagedSelected?.shape
+                when {
+                    keyed != null && shapeChord == null -> " · $keyed chord tones"
+                    keyed != null && shape != null -> " · $keyed in the $shape shape"
+                    keyed != null -> " · $keyed shapes"
+                    shape != null -> " · $shape shape"
+                    else -> ""
+                }
+            }
             ViewMode.Arpeggio -> "${root.name} ${chord.name} arpeggio — ${chord.displayName(root)}"
             ViewMode.Chord -> "${chord.displayName(root)} — ${root.name} ${chord.name}" + (cagedSelected?.let { " · ${it.shape} shape" } ?: "")
+            ViewMode.Note -> "Every ${root.name} on the neck"
             ViewMode.Song -> song?.title ?: overlay?.let { "${it.root.name} ${it.name}" } ?: "Nothing loaded"
         }
 
@@ -284,12 +325,14 @@ class NeckScapeViewModel : ViewModel() {
 
     /**
      * Switching keeps scale and chord related: C Ionian ⇄ C, C Dorian ⇄ Cm,
-     * Cm7 → C Aeolian. Chord and arpeggio share the chord.
+     * Cm7 → C Aeolian. Chord and arpeggio share the chord. The note view opens
+     * the whole neck, since its point is every place the note falls.
      */
     fun setViewMode(mode: ViewMode) = edit {
         if (mode == viewMode) return@edit this
         when {
             mode == ViewMode.Song -> copy(viewMode = mode)
+            mode == ViewMode.Note -> copy(viewMode = mode).fullNeck()
             mode != ViewMode.Scale && viewMode != ViewMode.Scale -> copy(viewMode = mode)
             mode != ViewMode.Scale -> {
                 val fitting = if (chord.fitsIn(scale)) chord else tonicChord(scale, sevenths) ?: chord
@@ -349,6 +392,9 @@ class NeckScapeViewModel : ViewModel() {
         val mode = if (family.modal && level.allowsScale(familyIndex, rotated)) rotated else scaleIndex
         copy(viewMode = ViewMode.Chord, root = root, scaleIndex = mode, chordIndex = Chords.all.indexOf(type))
     }
+
+    /** Picks a chord of the key to show over the scale (its CAGED shapes at Advanced); picking it again clears it. */
+    fun pickKeyChord(degree: Int) = edit { copy(keyChord = if (keyChord == degree) -1 else degree, cagedPick = -1) }
 
     fun selectTuning(index: Int) = edit { copy(tuningIndex = index, customTuning = null) }
 

@@ -15,7 +15,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION=1.1.0
+VERSION=1.2.0
 DIST="$ROOT/desktop/build/dist"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/neckscape-build"
 # jpackage (needed by createDistributable) isn't in Android Studio's JBR.

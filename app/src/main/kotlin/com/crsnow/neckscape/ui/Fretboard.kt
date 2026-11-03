@@ -15,12 +15,17 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -35,9 +40,12 @@ import com.crsnow.neckscape.theory.Position
 import com.crsnow.neckscape.theory.Tuning
 import com.crsnow.neckscape.theory.Voicing
 import com.crsnow.neckscape.theory.playingOrder
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /** What to draw on every fret position sounding a given pitch class. */
 data class NoteMark(val label: String, val color: Color)
@@ -78,8 +86,11 @@ fun degreeColor(interval: Interval): Color = when (interval.simpleDegree) {
     else -> Color(0xFF8E24AA)
 }
 
-/** A band above the neck naming a CAGED shape over its frets; [selected] draws it solid. */
-data class Region(val label: String, val frets: IntRange, val color: Color, val selected: Boolean)
+/**
+ * A band above the neck naming a CAGED shape over its frets, with a cloud drawn
+ * round the notes of its chord [shape]; [selected] draws both solid.
+ */
+data class Region(val label: String, val frets: IntRange, val color: Color, val selected: Boolean, val shape: Set<Position> = emptySet())
 
 /** CAGED shape colours: C red, A orange, G green, E blue, D purple. */
 fun cagedColor(letter: String): Color = when (letter) {
@@ -147,9 +158,13 @@ fun Fretboard(
     /** Tighter string spacing, for short screens (phones in landscape). */
     compact: Boolean = false,
     onTap: (Position) -> Unit = {},
+    /** A CAGED band tapped (index into [regions]). */
+    onRegionTap: (Int) -> Unit = {},
 ) {
     val measurer = rememberTextMeasurer()
     val currentOnTap by rememberUpdatedState(onTap)
+    val currentOnRegionTap by rememberUpdatedState(onRegionTap)
+    val currentRegions by rememberUpdatedState(regions)
     val numberColor = MaterialTheme.colorScheme.onSurfaceVariant
     val width = NAMES + OPEN_AREA + (1..fretCount).fold(0.dp) { acc, f -> acc + fretWidth(f) } + 8.dp
     val gap = if (compact) 27.dp else STRING_GAP
@@ -168,6 +183,18 @@ fun Fretboard(
                     detectTapGestures { tap ->
                         val wirePx = wirePositions(fretCount)
                         val px = if (leftHanded) size.width - tap.x else tap.x
+                        // The CAGED bands: anywhere in the strip over a band's frets, its lane picking between overlapping ones.
+                        val bands = currentRegions
+                        if (bands.isNotEmpty() && tap.y < REGION_STRIP.toPx()) {
+                            val over = bands.indices.filter { i ->
+                                val r = bands[i]
+                                r.frets.first <= fretCount &&
+                                    px in (if (r.frets.first == 0) 0f else wirePx[r.frets.first - 1])..wirePx[r.frets.last.coerceAtMost(fretCount)]
+                            }
+                            val lane = if (tap.y < (3 + 12.5f).dp.toPx()) 0 else 1
+                            (over.firstOrNull { it % 2 == lane } ?: over.firstOrNull())?.let(currentOnRegionTap)
+                            return@detectTapGestures
+                        }
                         val fret = (0..fretCount).firstOrNull { px < wirePx[it] } ?: fretCount
                         val fromTop = ((tap.y - top.toPx()) / gap.toPx()).roundToInt()
                         val string = tuning.strings - 1 - fromTop
@@ -237,6 +264,16 @@ fun Fretboard(
             }
 
             val radius = minOf(gap.toPx(), fretWidth(fretCount).toPx()) * 0.42f
+            val anySelected = regions.any { it.selected }
+            fun regionColor(r: Region) = if (!anySelected || r.selected) r.color else r.color.copy(alpha = 0.3f)
+
+            // CAGED chord shapes: a cloud round each one's notes, under the dots.
+            for (r in regions) {
+                val centers = r.shape.filter { it.fret <= fretCount && it.string < tuning.strings }
+                    .map { Offset(x(fretCenter(it.fret)), stringY(it.string)) }
+                if (centers.isNotEmpty()) cloud(centers, radius - 1.dp.toPx(), 6.dp.toPx(), 2.dp.toPx(), regionColor(r))
+            }
+
             val lit = dots.filter { !it.faded }.map { it.position }.toSet()
             // What's sounding: a glow and a white ring, under the dots so badges stay readable
             // (plus a plain dot if the spot isn't marked).
@@ -272,7 +309,6 @@ fun Fretboard(
             }
 
             // CAGED shapes: lettered bands above the neck, alternating lanes where neighbours overlap.
-            val anySelected = regions.any { it.selected }
             regions.forEachIndexed { i, r ->
                 if (r.frets.first > fretCount) return@forEachIndexed
                 val from = if (r.frets.first == 0) 0f else wirePx[r.frets.first - 1] + 2.dp.toPx()
@@ -280,7 +316,7 @@ fun Fretboard(
                 val laneY = 3.dp.toPx() + (i % 2) * 13.dp.toPx()
                 val a = minOf(x(from), x(to))
                 val w = Math.abs(x(to) - x(from))
-                val color = if (!anySelected || r.selected) r.color else r.color.copy(alpha = 0.3f)
+                val color = regionColor(r)
                 drawRoundRect(color, Offset(a, laneY), Size(w, 12.dp.toPx()), CornerRadius(6.dp.toPx()))
                 label(measurer, r.label, Offset(a + w / 2, laneY + 6.dp.toPx()), Color.White, 9f, bold = true)
             }
@@ -300,6 +336,70 @@ fun Fretboard(
     }
     LocalScrollbars.current?.Horizontal(scroll, Modifier.fillMaxWidth(), reverse = leftHanded)
     }
+}
+
+/**
+ * A cloud outline round [centers]: scallops of radius [bump] spaced along their
+ * hull, [reach] out from each centre, with a faint fill. Each cloud draws in a
+ * layer of its own, so the inner edges can be cleared away without touching the
+ * board or a neighbouring cloud.
+ */
+private fun DrawScope.cloud(centers: List<Offset>, reach: Float, bump: Float, width: Float, color: Color) {
+    val hull = convexHull(centers.flatMap { c ->
+        (0 until 16).map { k -> c + Offset(cos(k * PI / 8).toFloat() * reach, sin(k * PI / 8).toFloat() * reach) }
+    })
+    val bumps = aroundLoop(hull, bump * 1.4f)
+    val inside = Path().apply {
+        moveTo(hull[0].x, hull[0].y)
+        for (p in hull.drop(1)) lineTo(p.x, p.y)
+        close()
+    }
+    val bounds = Rect(Offset.Zero, size)
+    drawIntoCanvas { canvas ->
+        canvas.saveLayer(bounds, Paint().apply { alpha = 0.12f })
+        drawPath(inside, color.copy(alpha = 1f))
+        for (b in bumps) drawCircle(color.copy(alpha = 1f), bump, b)
+        canvas.restore()
+        canvas.saveLayer(bounds, Paint())
+        for (b in bumps) drawCircle(color, bump + width, b)
+        drawPath(inside, Color.Black, blendMode = BlendMode.Clear)
+        for (b in bumps) drawCircle(Color.Black, bump, b, blendMode = BlendMode.Clear)
+        canvas.restore()
+    }
+}
+
+/** The convex hull of [points], anticlockwise (Andrew's monotone chain). */
+private fun convexHull(points: List<Offset>): List<Offset> {
+    val sorted = points.distinct().sortedWith(compareBy({ it.x }, { it.y }))
+    if (sorted.size < 3) return sorted
+    fun cross(o: Offset, a: Offset, b: Offset) = (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+    fun chain(ps: List<Offset>) = ArrayList<Offset>().also { h ->
+        for (p in ps) {
+            while (h.size >= 2 && cross(h[h.size - 2], h[h.size - 1], p) <= 0) h.removeAt(h.size - 1)
+            h += p
+        }
+        h.removeAt(h.size - 1)
+    }
+    return chain(sorted) + chain(sorted.reversed())
+}
+
+/** Points evenly spaced, about [spacing] apart, round the closed loop through [loop]. */
+private fun aroundLoop(loop: List<Offset>, spacing: Float): List<Offset> {
+    val edges = loop.indices.map { loop[it] to loop[(it + 1) % loop.size] }
+    val perimeter = edges.sumOf { (a, b) -> (b - a).getDistance().toDouble() }.toFloat()
+    val n = max(8, (perimeter / spacing).roundToInt())
+    val step = perimeter / n
+    val out = ArrayList<Offset>(n)
+    var along = 0f
+    for ((a, b) in edges) {
+        val length = (b - a).getDistance()
+        while (out.size < n && along <= length) {
+            out += a + (b - a) * (along / length)
+            along += step
+        }
+        along -= length
+    }
+    return out
 }
 
 /** X of the nut (index 0) and every fret wire, in px, before any left-handed mirroring. */

@@ -25,6 +25,9 @@ data class Note(val letter: Int, val accidental: Int = 0) {
         return Note(newLetter, acc)
     }
 
+    /** The name with its octave for a sounding pitch: C4 is middle C (MIDI 60), and C♭4 is MIDI 59. */
+    fun withOctave(midi: Int): String = name + (Math.floorDiv(midi - accidental, 12) - 1)
+
     override fun toString() = name
 
     companion object {

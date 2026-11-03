@@ -31,18 +31,50 @@ fun isMinorQuality(intervals: List<Interval>): Boolean {
 }
 
 /**
+ * The CAGED shapes a chord's triad takes: minor or major, and how far its fifth
+ * moves from them, -1 for diminished (B° in C major) or +1 for augmented.
+ */
+fun cagedQuality(intervals: List<Interval>): Pair<Boolean, Int> {
+    val semis = intervals.map { it.semitones % 12 }.toSet()
+    val minor = 3 in semis && 4 !in semis
+    val fifth = when {
+        7 in semis -> 0
+        minor && 6 in semis -> -1
+        !minor && 8 in semis -> 1
+        else -> 0
+    }
+    return minor to fifth
+}
+
+/** Open-string pitch classes of standard tuning, low E first, which the shapes are written for. */
+private val STANDARD = listOf(4, 9, 2, 7, 11, 4)
+
+/**
  * Every CAGED position for a root, up the neck in order: in C major, the C
  * shape at the nut, then A (fret 3), G (5), E (8), D (10), C again (12) …
+ * [fifth] moves each shape's fifths that many frets (see [cagedQuality]); a
+ * fifth flattened below the nut drops out of the shape.
  */
-fun cagedPositions(rootPc: Int, minor: Boolean, fretCount: Int): List<CagedPosition> {
+fun cagedPositions(rootPc: Int, minor: Boolean, fretCount: Int, fifth: Int = 0): List<CagedPosition> {
     val out = ArrayList<CagedPosition>()
     for (shape in CagedShape.entries) {
         // Open shapes stay at the nut; their window just stops at fret 0.
         var t = Math.floorMod(rootPc - shape.rootPc, 12)
         while (t + shape.hi <= fretCount + 1) {
             val open = if (minor) shape.minor else shape.major
-            val frets = (t + shape.lo).coerceAtLeast(0)..(t + shape.hi).coerceAtMost(fretCount)
-            out += CagedPosition(shape, t, frets, Voicing(open.map { f -> f?.plus(t) }))
+            val placed = open.mapIndexed { s, f ->
+                if (f == null) null
+                else if (fifth != 0 && Math.floorMod(STANDARD[s] + f - shape.rootPc, 12) == 7) (f + t + fifth).takeIf { it >= 0 }
+                else f + t
+            }.map { f -> f?.takeIf { it <= fretCount } }
+            // At the top of the neck a shape can run past the last fret: keep what's playable,
+            // as long as it's still the whole triad (root, third and fifth).
+            val kept = open.indices.filter { placed[it] != null }.map { Math.floorMod(STANDARD[it] + open[it]!! - shape.rootPc, 12) }.toSet()
+            if (0 !in kept || 7 !in kept || (3 !in kept && 4 !in kept)) { t += 12; continue }
+            // A moved fifth can step a fret outside the window; the window still covers the whole shape.
+            val sounding = placed.filterNotNull()
+            val frets = minOf(t + shape.lo, sounding.min()).coerceAtLeast(0)..maxOf(t + shape.hi, sounding.max()).coerceAtMost(fretCount)
+            out += CagedPosition(shape, t, frets, Voicing(placed))
             t += 12
         }
     }

@@ -95,7 +95,7 @@ class FeatureVideo {
     private val height = 1080
     private val appWidth = 1440
     private val density = 1.08f
-    private val steps = 22
+    private val steps = 24
 
     @Test fun render() {
         assumeTrue(System.getProperty("neckscape.video") == "1")
@@ -502,18 +502,29 @@ class FeatureVideo {
             vm.setLevel(Level.Intermediate)
             say(Caption(
                 "CAGED positions",
-                "From Intermediate up, the five CAGED shapes are marked up the neck.",
+                "From Intermediate up, the five CAGED shapes are marked up the neck, each chord shape outlined.",
                 step = nextStep(),
             ))
             hold(2.6)
             for (i in 0..4) {
                 vm.setCaged(i)
                 val p = state.cagedSelected!!
-                say(caption.value.copy(body = "From Intermediate up, the five CAGED shapes are marked up the neck.\n\nPick one to see that position, its chord shape ringed: ${p.shape} shape, frets ${p.frets.first}–${p.frets.last}."))
+                say(caption.value.copy(body = "From Intermediate up, the five CAGED shapes are marked up the neck, each chord shape outlined.\n\nPick one to see that position: ${p.shape} shape, frets ${p.frets.first}–${p.frets.last}."))
                 hold(1.6)
             }
             untilQuiet()
             vm.setCaged(-1)
+            narrate("caged_tap")
+            say(caption.value.copy(body = "From Intermediate up, the five CAGED shapes are marked up the neck, each chord shape outlined.\n\nTap a shape's bar above the neck to hear it strummed.", listening = true))
+            hold(1.2)
+            for (p in state.cagedPositions.take(5)) {
+                val shape = p.voicing.frets.withIndex().mapNotNull { (str, f) -> f?.let { Position(str, it) } }
+                vm.setSounding(shape.toSet())
+                sound(PluckSynth.strum(shape.map { state.tuning.midi[it.string] + it.fret }))
+                hold(1.4)
+            }
+            vm.setSounding(emptySet())
+            untilQuiet()
             vm.setLevel(Level.Advanced)
 
             narrate("key")
@@ -527,6 +538,21 @@ class FeatureVideo {
                 step = nextStep(),
             ))
             hold(2.0)
+
+            narrate("keyshapes")
+            vm.pickKeyChord(1)
+            say(Caption(
+                "CAGED shapes for every chord",
+                "At Advanced, tap a chord of the key to see its own CAGED shapes over the scale.\n\nii: Dm …",
+                step = nextStep(),
+            ))
+            hold(2.2)
+            narrate("keyshapes_dim")
+            vm.pickKeyChord(6)
+            say(caption.value.copy(body = "At Advanced, tap a chord of the key to see its own CAGED shapes over the scale.\n\n… vii°: B diminished, the minor shapes with the fifth a fret lower."))
+            hold(2.2)
+            untilQuiet()
+            vm.pickKeyChord(6)
             narrate("sevenths")
             vm.setDiatonicSevenths(true)
             say(caption.value.copy(body = "Every seven-note scale is harmonised for you, with Roman numerals — as triads or as sevenths:\nImaj7  ii7  iii7  IVmaj7  V7  vi7  viiø7"))
@@ -537,14 +563,14 @@ class FeatureVideo {
             vm.openChord(1, ii.root, ii.type!!)
             awaitVoicings()
             say(Caption(
-                "Tap a chord to see it",
-                "Tap ii and you get Dm7: every chord tone on the neck …",
+                "Open a chord to see it",
+                "Open ii and you get Dm7: every chord tone on the neck …",
                 step = nextStep(),
             ))
             hold(2.0)
             narrate("shapes")
             say(caption.value.copy(
-                body = "Tap ii and you get Dm7: every chord tone on the neck …\n\n… then playable shapes, found for the current tuning and strummed as you step through them.",
+                body = "Open ii and you get Dm7: every chord tone on the neck …\n\n… then playable shapes, found for the current tuning and strummed as you step through them.",
                 listening = true,
             ))
             hold(1.5)
@@ -595,6 +621,24 @@ class FeatureVideo {
             vm.selectTuning(10)
             say(caption.value.copy(body = "… and on ukulele.\n\nPresets for drop D, open G, 7-string, bass and ukulele — or retune any string yourself. Notes, numbers and chord shapes all follow."))
             hold(2.0)
+
+            narrate("notes")
+            vm.selectTuning(0)
+            vm.setViewMode(ViewMode.Note)
+            vm.selectRoot(0)
+            say(Caption(
+                "Every note, everywhere",
+                "The Note view marks every place one note falls, in any tuning, each with its octave.\n\nEvery C on the neck …",
+                step = nextStep(),
+            ))
+            hold(2.4)
+            vm.selectRoot(6)
+            say(caption.value.copy(body = "The Note view marks every place one note falls, in any tuning, each with its octave.\n\n… every ${state.root.name}."))
+            hold(2.0)
+            untilQuiet()
+            vm.setViewMode(ViewMode.Scale)
+            vm.selectFamily(family("Major (diatonic)"))
+            vm.selectScale(0)
 
             narrate("pdf")
             vm.selectTuning(0)

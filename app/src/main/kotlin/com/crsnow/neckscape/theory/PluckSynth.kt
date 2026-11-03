@@ -2,7 +2,9 @@ package com.crsnow.neckscape.theory
 
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -65,6 +67,29 @@ object PluckSynth {
 
     private fun freq(midi: Int) = 440.0 * 2.0.pow((midi - 69) / 12.0)
 
+    /** How much the loop filter keeps of a note's fundamental each pass round the string. */
+    private fun loopGain(f: Double, brightness: Double): Double {
+        val w = 2 * PI * f / SAMPLE_RATE
+        return sqrt(brightness * brightness + (1 - brightness) * (1 - brightness) + 2 * brightness * (1 - brightness) * cos(w))
+    }
+
+    /**
+     * The loop filter's brightness and the per-pass damping that give a note its
+     * ring time. The filter alone makes short (high) strings die far too fast, a
+     * fraction of a second at the top frets, so the time is set instead: the low
+     * E's, from [damp], shortened gently up the neck (as 1/√f), as a real string's
+     * is. High notes get a lighter filter, so the damping never has to exceed 1.
+     */
+    private fun loop(f: Double, damp: Double, brightness: Float): Pair<Float, Float> {
+        val lowE = freq(40)
+        val lowEDamping = damp + (1 - damp) * 0.75 * (1 - SAMPLE_RATE / lowE / 1000.0).coerceIn(0.0, 1.0)
+        val lowETime = -1 / (lowE * ln(lowEDamping * loopGain(lowE, brightness.toDouble())))
+        val time = lowETime * sqrt(lowE / f).coerceAtMost(1.5)
+        var b = brightness.toDouble()
+        while (b > 0.02 && -1 / (f * ln(loopGain(f, b))) < 2 * time) b /= 2
+        return b.toFloat() to (exp(-1 / (f * time)) / loopGain(f, b)).coerceAtMost(1.0).toFloat()
+    }
+
     /** Short fade so a note cut off by the ring limit doesn't click. */
     private fun fade(i: Int, samples: Int) = ((samples - i) / (0.05f * SAMPLE_RATE)).coerceAtMost(1f)
 
@@ -119,8 +144,7 @@ object PluckSynth {
             val copy = line.copyOf()
             for (k in line.indices) line[k] = (copy[(k + period - 1) % period] + 2 * copy[k] + copy[(k + 1) % period]) / 4f
         }
-        // Higher strings lose energy faster per pass, so damp them less to even out ring times.
-        val damping = (damp + (1 - damp) * 0.75 * (1 - period / 1000.0).coerceIn(0.0, 1.0)).toFloat()
+        val (bright, damping) = loop(freq(midi), damp, brightness)
         var idx = 0
         var lp = 0f
         val attack = (attackMs / 1000 * SAMPLE_RATE).coerceAtLeast(1.0)
@@ -130,7 +154,7 @@ object PluckSynth {
             val next = (idx + 1) % period
             lp += body * (line[idx] - lp)
             val out = if (body < 1f) lp else line[idx]
-            line[idx] = damping * (brightness * line[next] + (1 - brightness) * line[idx])
+            line[idx] = damping * (bright * line[next] + (1 - bright) * line[idx])
             // Raised-cosine onset: the string speaks without a click.
             val onset = if (i < attack) (0.5 - 0.5 * kotlin.math.cos(PI * i / attack)).toFloat() else 1f
             mix[pos] += out * fade(i, samples) * gain * onset

@@ -18,16 +18,20 @@ arpeggio|Arpeggios work the same way. Here's A minor, in the same position, numb
 score|Any of these can be shown as standard notation. The note that's sounding lights up as it plays.
 tab|Or as tab, with the fret for every note.
 strings|The string slider narrows the view too. Here it's just the top three strings, which is handy for triad shapes.
-caged|From Intermediate up, the CAGED system is built in. The five shapes are marked along the neck, and picking one shows that position, with its chord shape ringed. C, A, G, E, and D.
+caged|From Intermediate up, the CAGED system is built in. The five shapes are marked along the neck, each chord shape outlined, and picking one shows that position. C, A, G, E, and D.
+caged_tap|Tap a shape's bar above the neck, and you hear it strummed.
 key|Every seven note scale is harmonised for you, with Roman numerals.
+keyshapes|At Advanced, tap a chord of the key, and you see its own CAGED shapes over the scale. Here's D minor.
+keyshapes_dim|And B diminished, with the fifth a fret lower.
 sevenths|Switch on sevenths, and you get the seventh chords of the key.
-tapchord|Tap chord two, and you get D minor seven, with every chord tone shown on the neck.
+tapchord|Open chord two in the chord view, and you get D minor seven, with every chord tone shown on the neck.
 shapes|Then step through playable shapes, found for the current tuning, and hear each one strummed.
 hendrix|There are a hundred and six chord types, from simple triads to altered dominants. This is E seven sharp nine: the Hendrix chord.
 linked_cm7|Scales and chords stay linked. Choose C minor seven,
 linked_scale|switch to the scale view, and you get a scale that fits it: C Aeolian, the natural minor.
 dadgad|Any tuning works. Here's D major, in dad gad tuning.
 ukulele|And on ukulele. There are presets for drop D, open G, seven string guitar and bass, or you can retune any string yourself.
+notes|To learn the neck, the note view marks every place one note falls, in any tuning, each with its octave. Here's every C.
 pdf|And any view can be saved as a PDF, ready to print as a handout. The fretboard, the score, the tab, or all three on one page.
 ai_intro|Neck Scape Navigator also works with AI assistants, like Claude Code. Ask for the chords to House of the Rising Sun, and they appear on the neck.
 ai_check|The app checks everything it's sent. Here the F chord had the wrong frets, so the app said what they really played, and the assistant fixed it. Anything from an AI is labelled: check by ear.

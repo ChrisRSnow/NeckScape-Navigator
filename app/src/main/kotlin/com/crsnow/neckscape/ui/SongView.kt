@@ -264,7 +264,7 @@ fun midiFor(state: UiState, sequence: List<Position>, shapes: List<Voicing>): By
         v.positions().map(::midi).sorted().mapIndexed { i, m -> MidiNote(at + i * 0.04, length - i * 0.04, m) }
     val four = TimeSignature(4, 4)
     return when (state.viewMode) {
-        ViewMode.Scale, ViewMode.Arpeggio ->
+        ViewMode.Scale, ViewMode.Arpeggio, ViewMode.Note ->
             Midi.write(sequence.thereAndBack().mapIndexed { i, p -> MidiNote(i.toDouble(), 1.0, midi(p)) }, state.title, state.tempo.toDouble(), four)
         ViewMode.Chord -> {
             val chosen = shapes.getOrNull(state.voicingIndex)?.let { listOf(it) } ?: shapes
