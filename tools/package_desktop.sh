@@ -15,7 +15,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION=1.2.0
+VERSION=1.3.0
 DIST="$ROOT/desktop/build/dist"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/neckscape-build"
 # jpackage (needed by createDistributable) isn't in Android Studio's JBR.
@@ -117,6 +117,7 @@ LAUNCHER
   <key>CFBundleVersion</key><string>$VERSION</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSMicrophoneUsageDescription</key><string>The tuner listens to your instrument through the microphone.</string>
 </dict></plist>
 PLIST
     cat > "$mac/README.txt" <<README

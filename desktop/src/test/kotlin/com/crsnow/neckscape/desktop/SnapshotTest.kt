@@ -23,7 +23,10 @@ import com.crsnow.neckscape.theory.VoicingFinder
 import com.crsnow.neckscape.theory.playingOrder
 import com.crsnow.neckscape.ui.Display
 import com.crsnow.neckscape.ui.LabelMode
+import com.crsnow.neckscape.ui.AudioInput
 import com.crsnow.neckscape.ui.AudioOutput
+import com.crsnow.neckscape.ui.LocalAudioInput
+import com.crsnow.neckscape.ui.TunerDialog
 import com.crsnow.neckscape.ui.LocalNotePlayer
 import com.crsnow.neckscape.ui.LocalScrollbars
 import com.crsnow.neckscape.ui.NotePlayer
@@ -174,6 +177,41 @@ class SnapshotTest {
         assertEquals(setOf("1:3", "2:5", "3:5", "4:5", "5:3"), tap(700f, 408f))
         Thread.sleep(300)
         assertTrue("the strum reached the speaker", synchronized(played) { played.any { it > 0 } })
+        scene.close()
+    }
+
+    /** The tuner hearing an A string 12 cents flat, through a stand-in microphone. */
+    @Test fun tuner() {
+        val mic = object : AudioInput {
+            @Volatile var running = false
+            override fun start(sampleRate: Int, onBlock: (FloatArray, Int) -> Unit, onError: (String) -> Unit) {
+                running = true
+                Thread {
+                    val f = 110.0 * Math.pow(2.0, -12 / 1200.0)
+                    var t = 0
+                    val block = FloatArray(1024)
+                    repeat(sampleRate * 2 / block.size) {
+                        for (i in block.indices) {
+                            val x = 2 * Math.PI * f * (t + i) / sampleRate
+                            block[i] = (0.3 * Math.sin(x) + 0.2 * Math.sin(2 * x) + 0.1 * Math.sin(3 * x)).toFloat()
+                        }
+                        t += block.size
+                        if (running) onBlock(block, block.size)
+                    }
+                }.start()
+            }
+            override fun stop() { running = false }
+        }
+        val scene = ImageComposeScene(900, 1000, Density(1.5f)) {
+            CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalAudioInput provides mic) {
+                NeckScapeTheme(dark = true, fontFamily = InterFamily, logo = LogoPainter) {
+                    TunerDialog(Tunings.all.first(), "Standard (EADGBE)") {}
+                }
+            }
+        }
+        var t = 0L
+        repeat(30) { scene.render(t); t += 100_000_000; Thread.sleep(50) }
+        File("build/snapshots/tuner.png").writeBytes(scene.render(t).use { it.encodeToData()!!.bytes })
         scene.close()
     }
 

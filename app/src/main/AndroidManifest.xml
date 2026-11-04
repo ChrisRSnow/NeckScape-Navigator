@@ -4,6 +4,8 @@
     <!-- The AI bridge is a local HTTP server: it listens on the phone's own loopback
          (reached over adb forward), or on Wi-Fi only if LAN mode is switched on. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The tuner: asked for when it's first opened. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:allowBackup="true"

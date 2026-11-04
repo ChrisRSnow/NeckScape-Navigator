@@ -1,7 +1,9 @@
 package com.crsnow.neckscape
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -22,6 +24,7 @@ import com.crsnow.neckscape.song.Json
 import com.crsnow.neckscape.ui.AiTools
 import com.crsnow.neckscape.ui.FileOpener
 import com.crsnow.neckscape.ui.FileSaver
+import com.crsnow.neckscape.ui.LocalAudioInput
 import com.crsnow.neckscape.ui.LocalBridge
 import com.crsnow.neckscape.ui.LocalFileOpener
 import com.crsnow.neckscape.ui.LocalFileSaver
@@ -74,6 +77,20 @@ class MainActivity : ComponentActivity() {
         openDocument.launch(arrayOf("*/*"))
     }
 
+    // The tuner asks for the microphone the first time it opens.
+    private var onMicAnswer: ((Boolean) -> Unit)? = null
+    private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        onMicAnswer?.invoke(granted)
+        onMicAnswer = null
+    }
+    private val mic = AndroidAudioInput(this) { answer ->
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) answer(true)
+        else {
+            onMicAnswer = answer
+            askMic.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -92,6 +109,7 @@ class MainActivity : ComponentActivity() {
                     LocalFileSaver provides saver,
                     LocalFileOpener provides opener,
                     LocalBridge provides b,
+                    LocalAudioInput provides mic,
                 ) {
                     NeckScapeScreen(vm)
                 }
@@ -140,6 +158,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         player.release()
+        mic.stop()
         if (isFinishing) {
             tools = null
             bridge?.stop()

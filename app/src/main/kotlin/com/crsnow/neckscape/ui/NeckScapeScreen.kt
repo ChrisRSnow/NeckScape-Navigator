@@ -116,6 +116,7 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     val nearestVoicings by vm.nearestVoicings.collectAsStateWithLifecycle()
     val sounding by vm.sounding.collectAsStateWithLifecycle()
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showTuner by rememberSaveable { mutableStateOf(false) }
     var showTuningEditor by rememberSaveable { mutableStateOf(false) }
 
     val notes = state.intervals.map { state.root + it }
@@ -247,6 +248,7 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
                 onPdf = ::savePdf,
                 onMidi = ::saveMidi,
                 onSettings = { showSettings = true },
+                onTuner = if (LocalAudioInput.current != null) ({ showTuner = true }) else null,
             )
         },
         bottomBar = {
@@ -558,6 +560,10 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     }
 
     if (showSettings) SettingsDialog(state, vm) { showSettings = false }
+    if (showTuner) TunerDialog(
+        tuning = state.baseTuning,
+        tuningName = if (state.customTuning != null) "Custom tuning" else state.baseTuning.name,
+    ) { showTuner = false }
     if (showTuningEditor) TuningEditor(state, vm) { showTuningEditor = false }
 }
 
@@ -626,6 +632,7 @@ private fun AppTopBar(
     onPdf: (Boolean) -> Unit,
     onMidi: () -> Unit,
     onSettings: () -> Unit,
+    onTuner: (() -> Unit)? = null,
 ) {
     TopAppBar(
         navigationIcon = {
@@ -648,6 +655,7 @@ private fun AppTopBar(
             if (state.undoDepth > 0) ToolIcon("Undo the last change", AppIcons.Undo, onUndo)
             if (canOpen) ToolIcon("Open a song or tab", AppIcons.Open, onOpen)
             if (canSave) SaveMenu(state.display, onPdf, onMidi)
+            onTuner?.let { ToolIcon("Tuner", AppIcons.Fork, it) }
             ToolIcon("Settings", AppIcons.Tune, onSettings)
             Spacer(Modifier.width(4.dp))
         },

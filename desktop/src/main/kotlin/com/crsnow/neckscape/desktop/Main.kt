@@ -18,6 +18,7 @@ import com.crsnow.neckscape.bridge.BridgeServer
 import com.crsnow.neckscape.song.Importers
 import com.crsnow.neckscape.ui.AiTools
 import com.crsnow.neckscape.ui.FileOpener
+import com.crsnow.neckscape.ui.LocalAudioInput
 import com.crsnow.neckscape.ui.LocalBridge
 import com.crsnow.neckscape.ui.LocalFileOpener
 import com.crsnow.neckscape.ui.LocalScrollbars
@@ -31,6 +32,7 @@ import com.crsnow.neckscape.ui.NotePlayer
 
 fun main() = application {
     val player = remember { NotePlayer(JvmAudioOutput()) }
+    val mic = remember { JvmAudioInput() }
     val viewModel = remember { NeckScapeViewModel().also { it.player = player } }
     // The local AI bridge (docs/ai-integration-spec.md): 127.0.0.1 only, token in Settings.
     val bridge = remember {
@@ -46,6 +48,7 @@ fun main() = application {
             bridge.stop()
             Discovery.withdraw()
             player.release()
+            mic.stop()
             exitApplication()
         },
         title = "NeckScape-Navigator",
@@ -61,6 +64,7 @@ fun main() = application {
                 LocalFileOpener provides opener,
                 LocalBridge provides bridge,
                 LocalScrollbars provides DesktopScrollbars,
+                LocalAudioInput provides mic,
             ) {
                 NeckScapeScreen(vm = viewModel)
             }

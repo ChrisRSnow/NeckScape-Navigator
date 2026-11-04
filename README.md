@@ -37,6 +37,12 @@ apps built from the same code.
 - Switching views keeps them related: C Ionian ⇄ C, C Dorian ⇄ Cm, Cm7 → C Aeolian.
 - **Fret range** and **string range** sliders limit what's shown (and which
   chord shapes are offered) — e.g. frets 5–8 shows one box pattern.
+- **Tuner** — the tuning-fork button listens through the microphone and tunes
+  to whatever tuning is selected: the string is found automatically (or tap one
+  to lock it and hear its note), a needle shows the cents, and each string is
+  ticked once it holds in tune. Pitch detection is YIN (de Cheveigné & Kawahara,
+  2002), computed with an FFT, with outlier rejection and a median for a steady
+  needle.
 - **Sound** — tap any fret to hear it; ▶ Play runs the scale up and down in the
   numbered order (tempo slider, 40–240 BPM), or strums the chord. A ring shows
   the note(s) sounding. Stepping to a shape strums it.

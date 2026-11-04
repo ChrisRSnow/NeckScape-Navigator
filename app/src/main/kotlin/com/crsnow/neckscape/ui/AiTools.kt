@@ -24,7 +24,7 @@ import com.crsnow.neckscape.theory.VoicingFinder
 import java.util.Base64
 
 const val APP_NAME = "NeckScape-Navigator"
-const val APP_VERSION = "1.2.0"
+const val APP_VERSION = "1.3.0"
 
 /**
  * The app side of every AI tool (docs/ai-integration-spec.md). The bridge,

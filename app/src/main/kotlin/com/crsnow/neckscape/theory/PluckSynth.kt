@@ -135,7 +135,14 @@ object PluckSynth {
         smooth: Int, damp: Double, brightness: Float, gain: Float = 1f, body: Float = 1f,
         pluckAt: Double = 0.0, attackMs: Double = 0.0,
     ) {
-        val period = (SAMPLE_RATE / freq(midi)).roundToInt().coerceAtLeast(2)
+        // In tune: the loop must take exactly one cycle. Its filter takes `bright` samples off the
+        // buffer's length, and an allpass makes up the fraction a whole number of samples can't
+        // (Jaffe & Smith, "Extensions of the Karplus–Strong plucked-string algorithm", 1983).
+        val (bright, damping) = loop(freq(midi), damp, brightness)
+        val total = SAMPLE_RATE / freq(midi) + bright
+        val period = (total - 0.1).toInt().coerceAtLeast(2)
+        val frac = (total - period).toFloat()
+        val allpass = (1 - frac) / (1 + frac)
         val noise = FloatArray(period) { random.nextFloat() - 0.5f }
         // Plucking a fraction β along the string cancels the harmonics with a node there.
         val offset = (pluckAt * period).roundToInt()
@@ -144,9 +151,10 @@ object PluckSynth {
             val copy = line.copyOf()
             for (k in line.indices) line[k] = (copy[(k + period - 1) % period] + 2 * copy[k] + copy[(k + 1) % period]) / 4f
         }
-        val (bright, damping) = loop(freq(midi), damp, brightness)
         var idx = 0
         var lp = 0f
+        var apIn = 0f
+        var apOut = 0f
         val attack = (attackMs / 1000 * SAMPLE_RATE).coerceAtLeast(1.0)
         for (i in 0 until samples) {
             val pos = start + i
@@ -154,7 +162,10 @@ object PluckSynth {
             val next = (idx + 1) % period
             lp += body * (line[idx] - lp)
             val out = if (body < 1f) lp else line[idx]
-            line[idx] = damping * (bright * line[next] + (1 - bright) * line[idx])
+            val filtered = damping * (bright * line[next] + (1 - bright) * line[idx])
+            apOut = allpass * filtered + apIn - allpass * apOut
+            apIn = filtered
+            line[idx] = apOut
             // Raised-cosine onset: the string speaks without a click.
             val onset = if (i < attack) (0.5 - 0.5 * kotlin.math.cos(PI * i / attack)).toFloat() else 1f
             mix[pos] += out * fade(i, samples) * gain * onset

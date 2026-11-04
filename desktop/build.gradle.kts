@@ -57,7 +57,7 @@ compose.desktop {
             // From :desktop:suggestRuntimeModules; java.desktop (incl. Java Sound) is always in.
             modules("java.instrument", "jdk.unsupported", "java.xml")
             packageName = "neckscape"
-            packageVersion = "1.2.0"
+            packageVersion = "1.3.0"
             description = "Scales and chords on a guitar fretboard"
             vendor = "crsnow"
             // Drawn by tools/make_icons.py.

@@ -56,6 +56,14 @@ object AppIcons {
         moveTo(7f, 15f); lineTo(7f, 19f)
     }
 
+    /** A tuning fork, for the tuner. */
+    val Fork = icon("Fork") {
+        moveTo(8.5f, 3f); lineTo(8.5f, 10.5f)
+        curveTo(8.5f, 13.8f, 15.5f, 13.8f, 15.5f, 10.5f)
+        lineTo(15.5f, 3f)
+        moveTo(12f, 13f); lineTo(12f, 21f)
+    }
+
     val Speaker = icon("Speaker") {
         moveTo(4f, 9.5f); lineTo(8f, 9.5f); lineTo(12.5f, 5.5f); lineTo(12.5f, 18.5f); lineTo(8f, 14.5f); lineTo(4f, 14.5f); close()
         moveTo(16f, 9f); curveTo(17.3f, 10.6f, 17.3f, 13.4f, 16f, 15f)

@@ -55,7 +55,10 @@ import com.crsnow.neckscape.theory.diatonicChords
 import com.crsnow.neckscape.theory.playingOrder
 import com.crsnow.neckscape.theory.thereAndBack
 import com.crsnow.neckscape.ui.AiTools
+import com.crsnow.neckscape.ui.AudioInput
 import com.crsnow.neckscape.ui.AudioOutput
+import com.crsnow.neckscape.ui.LocalAudioInput
+import com.crsnow.neckscape.ui.TunerDialog
 import com.crsnow.neckscape.ui.Display
 import com.crsnow.neckscape.ui.NeckScapeScreen
 import com.crsnow.neckscape.ui.NeckScapeTheme
@@ -95,7 +98,7 @@ class FeatureVideo {
     private val height = 1080
     private val appWidth = 1440
     private val density = 1.08f
-    private val steps = 24
+    private val steps = 25
 
     @Test fun render() {
         assumeTrue(System.getProperty("neckscape.video") == "1")
@@ -113,6 +116,9 @@ class FeatureVideo {
         val caption = mutableStateOf(Caption(""))
         val pdfPage = mutableStateOf<ImageBitmap?>(null)
         val terminal = mutableStateOf<List<String>>(emptyList())
+        // The tuner scene: the dialog over the app, listening to a microphone the tour plays into.
+        val mic = VideoMic()
+        val tunerOpen = mutableStateOf(false)
         // The real bridge, as Claude Code reaches it through the MCP server.
         val bridge = BridgeServer(
             object : SettingsStore {
@@ -124,7 +130,7 @@ class FeatureVideo {
         ).also { it.start() }
 
         val scene = ImageComposeScene(width, height, Density(density)) {
-            CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalNotePlayer provides silent) {
+            CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalNotePlayer provides silent, LocalAudioInput provides mic) {
                 NeckScapeTheme(dark = true, fontFamily = InterFamily, logo = LogoPainter) {
                     Box(Modifier.fillMaxSize()) {
                         Row(Modifier.fillMaxSize()) {
@@ -132,6 +138,7 @@ class FeatureVideo {
                                 NeckScapeScreen(vm)
                                 pdfPage.value?.let { PdfPreview(it) }
                                 if (terminal.value.isNotEmpty()) Terminal(terminal.value, Modifier.align(Alignment.BottomEnd))
+                                if (tunerOpen.value) TunerDialog(vm.state.value.baseTuning, vm.state.value.baseTuning.name) {}
                             }
                             CaptionPanel(caption.value, Modifier.fillMaxSize())
                         }
@@ -141,7 +148,7 @@ class FeatureVideo {
             }
         }
 
-        Director(vm, scene, caption, pdfPage, terminal, bridge, out).tour()
+        Director(vm, scene, caption, pdfPage, terminal, bridge, out, mic, tunerOpen).tour()
         bridge.stop()
         scene.close()
     }
@@ -154,11 +161,15 @@ class FeatureVideo {
         val terminal: MutableState<List<String>>,
         val bridge: BridgeServer,
         val out: File,
+        val mic: VideoMic,
+        val tunerOpen: MutableState<Boolean>,
     ) {
         private var time = 0.0
         private var clock = 0L
         private var frame = 0
         private val audio = mutableListOf<Pair<NoteEvent, Instrument>>()
+        /** Sound made outside the synth (the string being tuned): start time, 44.1 kHz PCM. */
+        private val recorded = mutableListOf<Pair<Double, ShortArray>>()
         /** The sound new notes are played with (the app's Sound picker, kept in step). */
         private var instrument = Instrument.Acoustic
         private var stepNo = 0
@@ -210,6 +221,32 @@ class FeatureVideo {
         /** Queues sound starting now. */
         private fun sound(events: List<NoteEvent>) {
             audio += events.map { it.copy(at = it.at + time) to instrument }
+        }
+
+        /**
+         * A string ringing at [midi] while its peg is turned from [fromCents] to [toCents]
+         * (easing in over the first 60 %), heard by the open tuner and on the soundtrack.
+         * Runs in real time too, so the tuner's in-tune hold counts as it would live.
+         */
+        private fun tunePeg(midi: Int, fromCents: Double, toCents: Double, seconds: Double) {
+            val rate = PluckSynth.SAMPLE_RATE
+            val n = (seconds * rate).toInt()
+            var phase = 0.0
+            val pcm = FloatArray(n) { i ->
+                val t = i.toDouble() / rate
+                val u = (t / (seconds * 0.6)).coerceAtMost(1.0)
+                val c = fromCents + (toCents - fromCents) * u * u * (3 - 2 * u)
+                phase += 2 * Math.PI * 440.0 * Math.pow(2.0, (midi - 69 + c / 100) / 12.0) / rate
+                val ring = Math.exp(-t / 3.0) * minOf(1.0, t / 0.004)
+                (ring * (0.5 * Math.sin(phase) + 0.3 * Math.sin(2 * phase) + 0.15 * Math.sin(3 * phase) + 0.08 * Math.sin(4 * phase)) * 0.45).toFloat()
+            }
+            recorded += time to ShortArray(n) { (pcm[it] * 20000).toInt().toShort() }
+            val chunk = rate / 5
+            for (from in 0 until n step chunk) {
+                mic.hear(pcm.copyOfRange(from, minOf(n, from + chunk)))
+                Thread.sleep(200)
+                hold(minOf(n - from, chunk).toDouble() / rate)
+            }
         }
 
         /** Waits for the background voicing search to finish for the current chord. */
@@ -640,6 +677,20 @@ class FeatureVideo {
             vm.selectFamily(family("Major (diatonic)"))
             vm.selectScale(0)
 
+            narrate("tuner")
+            tunerOpen.value = true
+            say(Caption(
+                "A tuner, built in",
+                "The tuning-fork button listens through the microphone, finds the string you're playing and shows how far off it is — for whatever tuning is selected.",
+                step = nextStep(),
+            ))
+            tunePeg(45, fromCents = -32.0, toCents = 0.5, seconds = 4.5)
+            narrate("tuner_tick")
+            say(caption.value.copy(body = "The tuning-fork button listens through the microphone, finds the string you're playing and shows how far off it is — for whatever tuning is selected.\n\nTurn the peg until the needle's in the green, and the string gets a tick."))
+            tunePeg(40, fromCents = 24.0, toCents = -0.5, seconds = 4.5)
+            untilQuiet()
+            tunerOpen.value = false
+
             narrate("pdf")
             vm.selectTuning(0)
             vm.selectRoot(7)
@@ -743,7 +794,8 @@ class FeatureVideo {
 
             val rate = PluckSynth.SAMPLE_RATE
             // Each sound rendered on its own, then summed (they rarely overlap).
-            val parts = audio.groupBy({ it.second }, { it.first }).map { (sound, notes) -> PluckSynth.render(notes, ring = 2.5, instrument = sound) }
+            val parts = audio.groupBy({ it.second }, { it.first }).map { (sound, notes) -> PluckSynth.render(notes, ring = 2.5, instrument = sound) } +
+                recorded.map { (start, pcm) -> ShortArray((start * rate).toInt() + pcm.size).also { pcm.copyInto(it, (start * rate).toInt()) } }
             val music = ShortArray(parts.maxOf { it.size }) { i ->
                 parts.sumOf { p -> if (i < p.size) p[i].toInt() else 0 }.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
             }
@@ -768,6 +820,20 @@ class FeatureVideo {
             }
             writeWav(File(out, "audio.wav"), mix, rate)
             println("NeckScape video: $frame frames, %.1f s".format(time))
+        }
+    }
+
+    /** A stand-in microphone the tour plays into: whatever [hear] gets reaches the open tuner. */
+    private class VideoMic : AudioInput {
+        private var listener: ((FloatArray, Int) -> Unit)? = null
+        override fun start(sampleRate: Int, onBlock: (FloatArray, Int) -> Unit, onError: (String) -> Unit) { listener = onBlock }
+        override fun stop() { listener = null }
+        fun hear(samples: FloatArray) {
+            val l = listener ?: return
+            for (from in samples.indices step 1024) {
+                val block = samples.copyOfRange(from, minOf(samples.size, from + 1024))
+                l(block, block.size)
+            }
         }
     }
 
