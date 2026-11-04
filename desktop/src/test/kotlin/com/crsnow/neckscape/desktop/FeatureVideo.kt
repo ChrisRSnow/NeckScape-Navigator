@@ -686,7 +686,7 @@ class FeatureVideo {
             ))
             tunePeg(45, fromCents = -32.0, toCents = 0.5, seconds = 4.5)
             narrate("tuner_tick")
-            say(caption.value.copy(body = "The tuning-fork button listens through the microphone, finds the string you're playing and shows how far off it is — for whatever tuning is selected.\n\nTurn the peg until the needle's in the green, and the string gets a tick."))
+            say(caption.value.copy(body = "The tuning-fork button listens through the microphone, finds the string you're playing and shows how far off it is — for whatever tuning is selected.\n\nTurn the peg until the needle's in the green, and the string gets a tick.\n\nIt tunes violin, cello and double bass too, at any concert pitch (A = 440, 442, 415 …)."))
             tunePeg(40, fromCents = 24.0, toCents = -0.5, seconds = 4.5)
             untilQuiet()
             tunerOpen.value = false

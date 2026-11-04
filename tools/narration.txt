@@ -33,7 +33,7 @@ dadgad|Any tuning works. Here's D major, in dad gad tuning.
 ukulele|And on ukulele. There are presets for drop D, open G, seven string guitar and bass, or you can retune any string yourself.
 notes|To learn the neck, the note view marks every place one note falls, in any tuning, each with its octave. Here's every C.
 tuner|There's a tuner built in. It listens through the microphone, finds the string you're playing, and shows how far off it is, for whatever tuning is selected.
-tuner_tick|Turn the peg until the needle's in the green, and the string gets a tick.
+tuner_tick|Turn the peg until the needle's in the green, and the string gets a tick. It tunes violin, cello and double bass too, at any concert pitch.
 pdf|And any view can be saved as a PDF, ready to print as a handout. The fretboard, the score, the tab, or all three on one page.
 ai_intro|Neck Scape Navigator also works with AI assistants, like Claude Code. Ask for the chords to House of the Rising Sun, and they appear on the neck.
 ai_check|The app checks everything it's sent. Here the F chord had the wrong frets, so the app said what they really played, and the assistant fixed it. Anything from an AI is labelled: check by ear.

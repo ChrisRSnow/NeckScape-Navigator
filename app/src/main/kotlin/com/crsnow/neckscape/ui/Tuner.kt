@@ -9,10 +9,13 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import com.crsnow.neckscape.theory.PitchTracker
 import com.crsnow.neckscape.theory.TunedStrings
+import com.crsnow.neckscape.theory.TunerInstruments
 import com.crsnow.neckscape.theory.Tuning
 import com.crsnow.neckscape.theory.openNote
 import com.crsnow.neckscape.theory.tunerReading
@@ -70,23 +74,35 @@ private fun centsColor(cents: Double) = when {
 
 /**
  * Listens to the microphone and shows how far the string being played is from
- * its note in [tuning]: the string is found automatically (or picked), a needle
+ * its note in the neck's tuning, or a bowed string instrument's ([TunerInstruments]):
+ * the string is found automatically (or picked), a needle
  * shows the cents, and each string gets a tick once it's held in tune. Tapping a
  * string also plays its note, for tuning by ear.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TunerDialog(tuning: Tuning, tuningName: String, onDismiss: () -> Unit) {
+fun TunerDialog(
+    neck: Tuning,
+    neckName: String,
+    referenceA: Int = 440,
+    onReferenceA: ((Int) -> Unit)? = null,
+    onDismiss: () -> Unit,
+) {
     val input = LocalAudioInput.current
     val player = LocalNotePlayer.current
     val heard = remember { MutableStateFlow<Double?>(null) }
     val problem = remember { MutableStateFlow<String?>(null) }
     val hz by heard.collectAsState()
     val error by problem.collectAsState()
+    // The neck's own tuning unless another instrument is picked (they're for the tuner only).
+    var other by remember { mutableStateOf<Tuning?>(null) }
+    val tuning = other ?: neck
+    val tuningName = other?.name ?: neckName
     var locked by remember(tuning) { mutableStateOf<Int?>(null) }
     var previous by remember(tuning) { mutableStateOf<Int?>(null) }
-    val tuned = remember(tuning) { TunedStrings() }
-    var tunedNow by remember(tuning) { mutableStateOf(emptySet<Int>()) }
+    // A new tuning or reference pitch moves the targets, so the ticks start again.
+    val tuned = remember(tuning, referenceA) { TunedStrings() }
+    var tunedNow by remember(tuning, referenceA) { mutableStateOf(emptySet<Int>()) }
     // While a reference note plays, the microphone hears it: don't let it tick the string.
     var referenceUntil by remember { mutableLongStateOf(0L) }
 
@@ -101,7 +117,7 @@ fun TunerDialog(tuning: Tuning, tuningName: String, onDismiss: () -> Unit) {
         }
     }
 
-    val reading = hz?.let { tunerReading(it, tuning, locked, previous) }
+    val reading = hz?.let { tunerReading(it, tuning, locked, previous, referenceA.toDouble()) }
     LaunchedEffect(reading) {
         if (reading != null) previous = reading.string
         val now = System.nanoTime()
@@ -114,7 +130,20 @@ fun TunerDialog(tuning: Tuning, tuningName: String, onDismiss: () -> Unit) {
         title = { Text("Tuner") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(tuningName, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = other == null, onClick = { other = null }, label = { Text("Neck") })
+                    for (instrument in TunerInstruments.all) {
+                        FilterChip(
+                            selected = other == instrument,
+                            onClick = { other = instrument },
+                            label = { Text(instrument.name.substringBefore(" (")) },
+                        )
+                    }
+                }
+                Text(
+                    tuningName + if (referenceA != 440) "  ·  A4 = $referenceA Hz" else "",
+                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 when {
                     input == null -> Text("There's no microphone to listen with.")
                     error != null -> Text(error!!, color = MaterialTheme.colorScheme.error)
@@ -171,9 +200,32 @@ fun TunerDialog(tuning: Tuning, tuningName: String, onDismiss: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                onReferenceA?.let { ReferencePitch(referenceA, it) }
             }
         },
     )
+}
+
+/**
+ * Concert pitch: A4 in Hz, a hertz at a time or one of the usual ones (432,
+ * 440, the 442–443 many orchestras tune to, the 415 of baroque ensembles).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ReferencePitch(hz: Int, onChange: (Int) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Concert pitch", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = { onChange(hz - 1) }, enabled = hz > MIN_REFERENCE_A, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(40.dp)) { Text("−") }
+            Text("A4 = $hz Hz", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 6.dp))
+            OutlinedButton(onClick = { onChange(hz + 1) }, enabled = hz < MAX_REFERENCE_A, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(40.dp)) { Text("+") }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (preset in listOf(415, 432, 440, 442, 443)) {
+                FilterChip(selected = hz == preset, onClick = { onChange(preset) }, label = { Text("$preset") })
+            }
+        }
+    }
 }
 
 /** −50 … +50 cents, with the in-tune band shaded and a needle at [cents] (none when nothing's heard). */

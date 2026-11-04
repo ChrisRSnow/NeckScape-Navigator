@@ -136,6 +136,32 @@ class PitchTest {
         assertTrue(tuned.strings.isEmpty())
     }
 
+    @Test fun `a different concert pitch moves the targets and the synth together`() {
+        val standard = Tunings.all.first()
+        // At A = 442 an A string at 110.5 Hz is in tune; at 440 the same string is 7.8 cents sharp.
+        assertEquals(0.0, tunerReading(110.5, standard, a4 = 442.0).stringCents, 0.01)
+        assertEquals(7.85, tunerReading(110.5, standard).stringCents, 0.01)
+        // And the app plays A at 442 when asked to.
+        val pcm = PluckSynth.render(listOf(NoteEvent(69, 0.0)), ring = 1.0, a4 = 442.0)
+        val heard = PitchDetector.detect(FloatArray(PitchDetector.WINDOW) { pcm[4000 + it] / 32768f }, rate)!!.hz
+        assertTrue("heard $heard", abs(cents(heard, 442.0)) < 1)
+    }
+
+    @Test fun `the tuner's bowed strings, and their every string heard`() {
+        val (violin, cello, bass) = TunerInstruments.all
+        assertEquals(listOf(55, 62, 69, 76), violin.midi)
+        assertEquals(listOf(36, 43, 50, 57), cello.midi)
+        assertEquals(listOf(28, 33, 38, 43), bass.midi)
+        for (t in TunerInstruments.all) for ((s, m) in t.midi.withIndex()) {
+            val heard = PitchDetector.detect(tone(hz(m) * 2.0.pow(-8 / 1200.0)), rate)!!.hz
+            val r = tunerReading(heard, t)
+            assertEquals("${t.name} string $s", s, r.string)
+            assertEquals("${t.name} string $s", -8.0, r.stringCents, 1.0)
+        }
+        // They're the tuner's alone: the neck's tunings don't include them.
+        assertTrue(Tunings.all.none { it.name.startsWith("Violin") || it.name.startsWith("Cello") })
+    }
+
     @Test fun `readings name the note and the string to tune`() {
         val standard = Tunings.all.first()
         val flatA = tunerReading(hz(45) * 2.0.pow(-20 / 1200.0), standard)

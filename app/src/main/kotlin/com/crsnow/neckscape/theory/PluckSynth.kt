@@ -34,7 +34,8 @@ object PluckSynth {
     const val SAMPLE_RATE = 44_100
 
     /** Renders [events] into one mono 16-bit clip, each note ringing for [ring] seconds. */
-    fun render(events: List<NoteEvent>, ring: Double = 1.6, instrument: Instrument = Instrument.Acoustic): ShortArray {
+    /** [a4] is the reference pitch the notes are tuned to (A above middle C, 440 Hz by default). */
+    fun render(events: List<NoteEvent>, ring: Double = 1.6, instrument: Instrument = Instrument.Acoustic, a4: Double = 440.0): ShortArray {
         if (events.isEmpty()) return ShortArray(0)
         // Pianos and the electric ring on a little longer than a nylon string.
         val tail = when (instrument) {
@@ -50,13 +51,13 @@ object PluckSynth {
             val start = (event.at * SAMPLE_RATE).roundToInt()
             when (instrument) {
                 // Guitars: the pick (or finger) position and a few-ms onset keep the attack from clicking.
-                Instrument.Acoustic -> pluck(mix, start, samples, event.midi, random, smooth = 2, damp = 0.996, brightness = 0.5f,
+                Instrument.Acoustic -> pluck(mix, start, samples, freq(event.midi, a4), random, smooth = 2, damp = 0.996, brightness = 0.5f,
                     pluckAt = 0.18, attackMs = 4.0)
-                Instrument.Classical -> pluck(mix, start, samples, event.midi, random, smooth = 12, damp = 0.992, brightness = 0.5f,
+                Instrument.Classical -> pluck(mix, start, samples, freq(event.midi, a4), random, smooth = 12, damp = 0.992, brightness = 0.5f,
                     body = 0.22f, pluckAt = 0.27, attackMs = 11.0, gain = velocity)
-                Instrument.Electric -> pluck(mix, start, samples, event.midi, random, smooth = 2, damp = 0.9984, brightness = 0.5f,
+                Instrument.Electric -> pluck(mix, start, samples, freq(event.midi, a4), random, smooth = 2, damp = 0.9984, brightness = 0.5f,
                     gain = 0.9f, pluckAt = 0.15, attackMs = 3.0)
-                Instrument.Piano -> piano(mix, start, samples, event.midi)
+                Instrument.Piano -> piano(mix, start, samples, event.midi, a4)
             }
         }
         if (instrument == Instrument.Electric) overdrive(mix)
@@ -65,7 +66,7 @@ object PluckSynth {
         return ShortArray(length) { (mix[it] * gain).roundToInt().toShort() }
     }
 
-    private fun freq(midi: Int) = 440.0 * 2.0.pow((midi - 69) / 12.0)
+    private fun freq(midi: Int, a4: Double = 440.0) = a4 * 2.0.pow((midi - 69) / 12.0)
 
     /** How much the loop filter keeps of a note's fundamental each pass round the string. */
     private fun loopGain(f: Double, brightness: Double): Double {
@@ -131,15 +132,15 @@ object PluckSynth {
      * darker, woodier tone.
      */
     private fun pluck(
-        mix: FloatArray, start: Int, samples: Int, midi: Int, random: Random,
+        mix: FloatArray, start: Int, samples: Int, hz: Double, random: Random,
         smooth: Int, damp: Double, brightness: Float, gain: Float = 1f, body: Float = 1f,
         pluckAt: Double = 0.0, attackMs: Double = 0.0,
     ) {
         // In tune: the loop must take exactly one cycle. Its filter takes `bright` samples off the
         // buffer's length, and an allpass makes up the fraction a whole number of samples can't
         // (Jaffe & Smith, "Extensions of the Karplus–Strong plucked-string algorithm", 1983).
-        val (bright, damping) = loop(freq(midi), damp, brightness)
-        val total = SAMPLE_RATE / freq(midi) + bright
+        val (bright, damping) = loop(hz, damp, brightness)
+        val total = SAMPLE_RATE / hz + bright
         val period = (total - 0.1).toInt().coerceAtLeast(2)
         val frac = (total - period).toFloat()
         val allpass = (1 - frac) / (1 + frac)
@@ -206,8 +207,8 @@ object PluckSynth {
      * decaying (high ones faster) in two stages, two strings per note a hair
      * apart for the piano's slow beating.
      */
-    private fun piano(mix: FloatArray, start: Int, samples: Int, midi: Int) {
-        val f0 = freq(midi)
+    private fun piano(mix: FloatArray, start: Int, samples: Int, midi: Int, a4: Double) {
+        val f0 = freq(midi, a4)
         val b = 0.00012 * 2.0.pow((midi - 48) / 24.0) // inharmonicity grows up the keyboard
         val base = 3.2 * 2.0.pow(-(midi - 48) / 30.0) // low notes sustain longer
         val partials = (1..24).filter { n -> n * f0 * sqrt(1 + b * n * n) < 9_000 }

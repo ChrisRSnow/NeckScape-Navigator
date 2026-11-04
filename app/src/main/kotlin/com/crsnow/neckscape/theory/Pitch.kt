@@ -213,12 +213,12 @@ class Biquad(private val b0: Double, private val b1: Double, private val b2: Dou
 data class TunerReading(val hz: Double, val note: String, val noteCents: Double, val string: Int, val stringCents: Double)
 
 /**
- * The reading for [hz] in [tuning]. The string is [locked] if one is picked,
+ * The reading for [hz] in [tuning], with A4 at [a4] Hz. The string is [locked] if one is picked,
  * else the nearest; but a [previous] string is kept until another is nearer by
  * a semitone, so the target doesn't flicker on a note between two strings.
  */
-fun tunerReading(hz: Double, tuning: Tuning, locked: Int? = null, previous: Int? = null): TunerReading {
-    val midi = 69 + 12 * ln(hz / 440) / ln(2.0)
+fun tunerReading(hz: Double, tuning: Tuning, locked: Int? = null, previous: Int? = null, a4: Double = 440.0): TunerReading {
+    val midi = 69 + 12 * ln(hz / a4) / ln(2.0)
     val nearest = midi.roundToInt()
     // Sharps, as tuners name notes.
     val name = Note.spellings(nearest).first().withOctave(nearest)
@@ -226,6 +226,18 @@ fun tunerReading(hz: Double, tuning: Tuning, locked: Int? = null, previous: Int?
     val closest = tuning.midi.indices.minBy(::off)
     val string = locked ?: previous?.takeIf { it in tuning.midi.indices && off(it) <= off(closest) + 1 } ?: closest
     return TunerReading(hz, name, (midi - nearest) * 100, string, (midi - tuning.midi[string]) * 100)
+}
+
+/**
+ * Instruments the tuner tunes besides whatever's on the neck: the bowed strings,
+ * in fifths (the double bass in fourths). They're for the tuner only, not neck views.
+ */
+object TunerInstruments {
+    val all: List<Tuning> = listOf(
+        Tuning.parse("Violin (GDAE)", "G3 D4 A4 E5"),
+        Tuning.parse("Cello (CGDA)", "C2 G2 D3 A3"),
+        Tuning.parse("Double bass (EADG)", "E1 A1 D2 G2"),
+    )
 }
 
 /** A string's open note with its octave, spelled as the tuning names it (E2, E♭4). */

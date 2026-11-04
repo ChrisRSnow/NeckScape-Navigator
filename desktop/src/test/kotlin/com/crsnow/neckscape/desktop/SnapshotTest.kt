@@ -205,7 +205,7 @@ class SnapshotTest {
         val scene = ImageComposeScene(900, 1000, Density(1.5f)) {
             CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalAudioInput provides mic) {
                 NeckScapeTheme(dark = true, fontFamily = InterFamily, logo = LogoPainter) {
-                    TunerDialog(Tunings.all.first(), "Standard (EADGBE)") {}
+                    TunerDialog(Tunings.all.first(), "Standard (EADGBE)", referenceA = 440, onReferenceA = {}) {}
                 }
             }
         }

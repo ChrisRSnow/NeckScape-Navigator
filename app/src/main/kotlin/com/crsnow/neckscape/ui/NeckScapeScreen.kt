@@ -220,6 +220,7 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
     // Pushed content (the AI bridge) plays through the same speaker, with the chosen sound.
     LaunchedEffect(player) { vm.player = player }
     LaunchedEffect(player, state.instrument) { player?.instrument = state.instrument }
+    LaunchedEffect(player, state.referenceA) { player?.referenceA = state.referenceA.toDouble() }
 
     // Phones on their side are wide but short: two panes, slimmer bars.
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -561,8 +562,10 @@ fun NeckScapeScreen(vm: NeckScapeViewModel = viewModel()) {
 
     if (showSettings) SettingsDialog(state, vm) { showSettings = false }
     if (showTuner) TunerDialog(
-        tuning = state.baseTuning,
-        tuningName = if (state.customTuning != null) "Custom tuning" else state.baseTuning.name,
+        neck = state.baseTuning,
+        neckName = if (state.customTuning != null) "Custom tuning" else state.baseTuning.name,
+        referenceA = state.referenceA,
+        onReferenceA = vm::setReferenceA,
     ) { showTuner = false }
     if (showTuningEditor) TuningEditor(state, vm) { showTuningEditor = false }
 }
@@ -1038,6 +1041,7 @@ private fun SettingsDialog(state: UiState, vm: NeckScapeViewModel, onDismiss: ()
                     Text("Left-handed", Modifier.weight(1f))
                     Switch(checked = state.leftHanded, onCheckedChange = vm::setLeftHanded)
                 }
+                ReferencePitch(state.referenceA, vm::setReferenceA)
                 LocalBridge.current?.let { BridgeSettings(it) }
             }
             LocalScrollbars.current?.Vertical(scroll, Modifier.align(Alignment.CenterEnd).fillMaxHeight())

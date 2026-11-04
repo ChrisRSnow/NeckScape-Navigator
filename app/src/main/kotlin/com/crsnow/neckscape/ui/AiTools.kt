@@ -24,7 +24,7 @@ import com.crsnow.neckscape.theory.VoicingFinder
 import java.util.Base64
 
 const val APP_NAME = "NeckScape-Navigator"
-const val APP_VERSION = "1.3.0"
+const val APP_VERSION = "1.4.0"
 
 /**
  * The app side of every AI tool (docs/ai-integration-spec.md). The bridge,
@@ -105,6 +105,7 @@ class AiTools(private val vm: NeckScapeViewModel, private val platform: String) 
             "tempo_bpm" to song?.tempoBpm,
             "tuning" to mapOf("name" to s.baseTuning.name, "strings" to s.baseTuning.midi.map { Tuning.midiName(it) }),
             "capo" to s.capo,
+            "reference_pitch_hz" to s.referenceA,
             "current_bar" to if (song != null) s.songBar + 1 else null,
             "bar_count" to when (song) {
                 is Progression -> song.flatBars.size

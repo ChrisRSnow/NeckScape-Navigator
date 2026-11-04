@@ -69,6 +69,9 @@ enum class ViewMode { Scale, Chord, Arpeggio, Note, Song }
 enum class Display { Fretboard, Tab, Score }
 enum class LabelMode { Notes, Intervals }
 
+const val MIN_REFERENCE_A = 415
+const val MAX_REFERENCE_A = 466
+
 const val MIN_TEMPO = 40
 const val MAX_TEMPO = 240
 
@@ -102,6 +105,8 @@ data class UiState(
     val tempo: Int = 180,
     /** The playback sound. */
     val instrument: Instrument = Instrument.Acoustic,
+    /** Concert pitch: A4 in Hz, for playback and the tuner (orchestras use 442, period ensembles 415). */
+    val referenceA: Int = 440,
     val leftHanded: Boolean = false,
     val diatonicSevenths: Boolean = false,
     /** Index into the voicing list, or -1 to show every chord tone. */
@@ -395,6 +400,8 @@ class NeckScapeViewModel : ViewModel() {
 
     /** Picks a chord of the key to show over the scale (its CAGED shapes at Advanced); picking it again clears it. */
     fun pickKeyChord(degree: Int) = edit { copy(keyChord = if (keyChord == degree) -1 else degree, cagedPick = -1) }
+
+    fun setReferenceA(hz: Int) = edit { copy(referenceA = hz.coerceIn(MIN_REFERENCE_A, MAX_REFERENCE_A)) }
 
     fun selectTuning(index: Int) = edit { copy(tuningIndex = index, customTuning = null) }
 

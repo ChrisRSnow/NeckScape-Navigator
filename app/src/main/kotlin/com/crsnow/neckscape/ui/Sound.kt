@@ -21,13 +21,15 @@ interface AudioOutput {
 class NotePlayer(private val output: AudioOutput) {
     /** The sound everything plays with. */
     @Volatile var instrument: Instrument = Instrument.Acoustic
+    /** The reference pitch everything plays at: A4 in Hz. */
+    @Volatile var referenceA: Double = 440.0
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
 
     fun play(events: List<NoteEvent>, ring: Double = 1.6) {
         job?.cancel()
         job = scope.launch {
-            val pcm = PluckSynth.render(events, ring, instrument)
+            val pcm = PluckSynth.render(events, ring, instrument, referenceA)
             output.play(pcm, PluckSynth.SAMPLE_RATE)
         }
     }
