@@ -40,7 +40,8 @@ apps built from the same code.
 - **Tuner** — the tuning-fork button listens through the microphone and tunes to
   whatever tuning is selected: the string is found automatically (or tap one to
   lock it and hear its note), a needle shows the cents, and each string is ticked
-  once it holds in tune. It also tunes violin, cello and double bass, and the
+  once it holds in tune. On Android the screen stays on while it's open, and the
+  tuner shows over the lock screen. It also tunes violin, cello and double bass, and the
   concert pitch can move from A = 440 Hz (415–466, with 432, 442 and 443 a tap
   away; in Settings too), which retunes playback to match. Pitch detection is YIN
   (de Cheveigné & Kawahara, 2002), computed with an FFT, with outlier rejection

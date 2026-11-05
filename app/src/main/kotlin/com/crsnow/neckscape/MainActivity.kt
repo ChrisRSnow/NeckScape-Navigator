@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -28,6 +30,7 @@ import com.crsnow.neckscape.ui.LocalAudioInput
 import com.crsnow.neckscape.ui.LocalBridge
 import com.crsnow.neckscape.ui.LocalFileOpener
 import com.crsnow.neckscape.ui.LocalFileSaver
+import com.crsnow.neckscape.ui.LocalKeepAwake
 import com.crsnow.neckscape.ui.LocalNotePlayer
 import com.crsnow.neckscape.ui.NeckScapeScreen
 import com.crsnow.neckscape.ui.NeckScapeTheme
@@ -91,6 +94,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * While the tuner is open: no screen timeout, and if the screen does go off
+     * (power button) waking it shows the tuner straight over the lock screen. Only
+     * this activity shows there; anything else still needs the phone unlocked.
+     */
+    @Suppress("DEPRECATION")
+    private fun keepAwake(on: Boolean) {
+        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) setShowWhenLocked(on)
+        else if (on) window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -110,6 +127,7 @@ class MainActivity : ComponentActivity() {
                     LocalFileOpener provides opener,
                     LocalBridge provides b,
                     LocalAudioInput provides mic,
+                    LocalKeepAwake provides ::keepAwake,
                 ) {
                     NeckScapeScreen(vm)
                 }

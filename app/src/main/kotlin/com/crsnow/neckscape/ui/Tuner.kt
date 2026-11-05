@@ -19,6 +19,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,6 +61,13 @@ interface AudioInput {
 
 /** Provided by each platform's entry point; null (no tuner) where there's no microphone. */
 val LocalAudioInput = staticCompositionLocalOf<AudioInput?> { null }
+
+/**
+ * Called with true while the tuner is open and false when it closes, so a phone
+ * can keep its screen on (and show the tuner over the lock screen) while both
+ * hands are on the instrument. Null where there's nothing to do.
+ */
+val LocalKeepAwake = staticCompositionLocalOf<((Boolean) -> Unit)?> { null }
 
 private const val SAMPLE_RATE = 44_100
 private val InTune = Color(0xFF43A047)
@@ -106,6 +114,12 @@ fun TunerDialog(
     // While a reference note plays, the microphone hears it: don't let it tick the string.
     var referenceUntil by remember { mutableLongStateOf(0L) }
 
+    val keepAwake = LocalKeepAwake.current
+    DisposableEffect(keepAwake) {
+        keepAwake?.invoke(true)
+        onDispose { keepAwake?.invoke(false) }
+    }
+
     // Only while the app is on screen: the microphone stops in the background.
     LifecycleStartEffect(input) {
         val tracker = PitchTracker(SAMPLE_RATE)
@@ -131,7 +145,7 @@ fun TunerDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = other == null, onClick = { other = null }, label = { Text("Neck") })
+                    FilterChip(selected = other == null, onClick = { other = null }, label = { Text("Guitar") })
                     for (instrument in TunerInstruments.all) {
                         FilterChip(
                             selected = other == instrument,
